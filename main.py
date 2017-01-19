@@ -43,7 +43,8 @@ def main(_):
                           dataset_name=FLAGS.dataset,
                           is_crop=FLAGS.is_crop,
                           checkpoint_dir=FLAGS.checkpoint_dir,
-                          sample_dir=FLAGS.sample_dir)
+                          sample_dir=FLAGS.sample_dir,
+                          flags=FLAGS)
         else:
             dcgan = DCGAN(sess,
                           image_size=FLAGS.image_size,
@@ -53,7 +54,8 @@ def main(_):
                           dataset_name=FLAGS.dataset,
                           is_crop=FLAGS.is_crop,
                           checkpoint_dir=FLAGS.checkpoint_dir,
-                          sample_dir=FLAGS.sample_dir)
+                          sample_dir=FLAGS.sample_dir,
+                          flags=FLAGS)
 
         if FLAGS.is_train:
             dcgan.train(FLAGS)

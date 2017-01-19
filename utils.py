@@ -7,6 +7,7 @@ import json
 import random
 import pprint
 import scipy.misc
+import scipy.signal
 import numpy as np
 from time import gmtime, strftime
 
@@ -26,6 +27,12 @@ def imread(path, is_grayscale = False):
     else:
         return scipy.misc.imread(path).astype(np.float)
 
+def match_images(image, references):
+    assert np.shape(image) == np.shape(references)[1:4]
+    matchness = [np.sum(ref * image) for ref in references]
+    am = np.argsort(-1*np.array(matchness))
+    return am
+     
 def merge_images(images, size):
     return inverse_transform(images)
 
@@ -41,6 +48,14 @@ def merge(images, size):
 
 def imsave(images, size, path):
     return scipy.misc.imsave(path, merge(images, size))
+
+def avg_noise(images):
+    filtered_images = scipy.signal.medfilt(images, kernel_size=[1,3,3,1])
+    avg_noise = np.mean(np.sum(filtered_images - images, axis=(1, 2, 3)))
+    return avg_noise
+
+
+
 
 def center_crop(x, crop_h, crop_w=None, resize_w=64):
     if crop_w is None:
@@ -143,7 +158,7 @@ def make_gif(images, fname, duration=2, true_image=False):
   clip = mpy.VideoClip(make_frame, duration=duration)
   clip.write_gif(fname, fps = len(images) / duration)
 
-def visualize(sess, dcgan, config, option):
+def visualize(sess, dcgan, config, option, seq=None):
   if option == 0:
     z_sample = np.random.uniform(-0.5, 0.5, size=(config.batch_size, dcgan.z_dim))
     samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
@@ -214,3 +229,22 @@ def visualize(sess, dcgan, config, option):
     new_image_set = [merge(np.array([images[idx] for images in image_set]), [10, 10]) \
         for idx in range(64) + range(63, -1, -1)]
     make_gif(new_image_set, './samples/test_gif_merged.gif', duration=8)
+  elif option == 5:
+    assert not dcgan.data_X is None
+    assert not seq is None
+    z_sample = np.random.uniform(-1, 1, size=(config.batch_size , dcgan.z_dim))
+    if config.dataset == "mnist":
+        y = np.random.choice(10, config.batch_size)
+        y_one_hot = np.zeros((config.batch_size, 10))
+        y_one_hot[np.arange(config.batch_size), y] = 1
+        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
+    else:
+        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+   
+    samples_normalized = samples / np.linalg.norm(samples.reshape([samples.shape[0], np.prod(samples.shape[1:4])]), axis=1).reshape([samples.shape[0],1,1,1])
+    matched_ref_index = [match_images(sample, dcgan.data_X)[0:4] for sample in samples_normalized]
+    matched = [dcgan.data_X[matched_index] for matched_index in matched_ref_index]
+    all_images = reduce((lambda x,y: (np.concatenate((x,y), 0))), (np.concatenate((samples[[i]], matched[i]), 0) for i in range(len(samples))), np.array([]).reshape(0, samples.shape[1], samples.shape[2], samples.shape[3]))
+    #save_images(samples, [8, 8], './samples/close_match_%s.png' % (str(seq)))
+    save_images(all_images, [8, 8 * 5], './samples/close_match_%s.png' % (str(seq).zfill(5)))
+

@@ -14,7 +14,7 @@ class DCGAN(object):
                  batch_size=64, sample_size = 64, output_size=64,
                  y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
                  gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-                 checkpoint_dir=None, sample_dir=None):
+                 checkpoint_dir=None, sample_dir=None, flags=None):
         """
 
         Args:
@@ -29,6 +29,8 @@ class DCGAN(object):
             dfc_dim: (optional) Dimension of discrim units for fully connected layer. [1024]
             c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
         """
+        self.flags = flags
+
         self.sess = sess
         self.is_crop = is_crop
         self.is_grayscale = (c_dim == 1)
@@ -64,8 +66,24 @@ class DCGAN(object):
 
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
+        self.process_input()
         self.build_model()
 
+    def process_input(self):
+        if self.dataset_name == 'mnist':
+            self.data_X, self.data_y = self.load_mnist()
+        else:
+            data = glob(os.path.join("./data", self.dataset_name, "*.jpg"))
+            batch_files = data
+            batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_size, is_grayscale = self.is_grayscale) for batch_file in batch_files]
+            if (self.is_grayscale):
+                self.data_X = np.array(batch).astype(np.float32)[:, :, :, None]
+            else:
+                self.data_X = np.array(batch).astype(np.float32)
+        
+        # Intensity normalized training images
+        self.data_X_normalized = self.data_X / np.linalg.norm(self.data_X.reshape([self.data_X.shape[0], np.prod(self.data_X.shape[1:4])]), axis=1).reshape([self.data_X.shape[0],1,1,1])
+    
     def build_model(self):
         if self.y_dim:
             self.y= tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
@@ -78,6 +96,10 @@ class DCGAN(object):
                                 name='z')
 
         self.z_sum = histogram_summary("z", self.z)
+   
+        self.avg_noise = tf.placeholder(tf.float32, None, name='avg_noise')
+        
+        self.avg_noise_sum = scalar_summary("avg_noise_sum", self.avg_noise)
 
         if self.y_dim:
             self.G = self.generator(self.z, self.y)
@@ -225,29 +247,35 @@ class DCGAN(object):
                 print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
                     % (epoch, idx, batch_idxs,
                         time.time() - start_time, errD_fake+errD_real, errG))
-
-                if np.mod(counter, 100) == 1:
-                    if config.dataset == 'mnist':
+                if config.dataset == 'mnist':
+                    samples, d_loss, g_loss = self.sess.run(
+                        [self.sampler, self.d_loss, self.g_loss],
+                        feed_dict={self.z: sample_z, self.images: sample_images, self.y:sample_labels}
+                    )
+                else:
+                    try:
                         samples, d_loss, g_loss = self.sess.run(
-                            [self.sampler, self.d_loss, self.g_loss],
-                            feed_dict={self.z: sample_z, self.images: sample_images, self.y:sample_labels}
-                        )
-                        save_images(samples, [8, 8],
-                                    './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-                        print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-                    else:
-                        try:
-                            samples, d_loss, g_loss = self.sess.run(
                                 [self.sampler, self.d_loss, self.g_loss],
                                 feed_dict={self.z: sample_z, self.images: sample_images}
-                            )
-                            save_images(samples, [8, 8],
+                        )
+                    except:
+                        print("one pic error!...")
+                
+                summary_str = self.sess.run(self.avg_noise_sum,
+                    feed_dict={ self.avg_noise: avg_noise(samples) })
+                self.writer.add_summary(summary_str, counter)
+         
+                if np.mod(counter, 100) == 0:
+                    if config.dataset == 'mnist':
+                       save_images(samples, [8, 8],
+                                    './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                    else:
+                       save_images(samples, [8, 8],
                                         './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-                            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-                        except:
-                            print("one pic error!...")
+                    print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
+                    visualize(self.sess, self, self.flags, 5, seq=counter)
 
-                if np.mod(counter, 500) == 2:
+                if np.mod(counter, 500) == 0:
                     self.save(config.checkpoint_dir, counter)
 
     def discriminator(self, image, y=None, reuse=False):
