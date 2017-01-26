@@ -51,11 +51,8 @@ def imsave(images, size, path):
 
 def avg_noise(images):
     filtered_images = scipy.signal.medfilt(images, kernel_size=[1,3,3,1])
-    avg_noise = np.mean(np.sum(filtered_images - images, axis=(1, 2, 3)))
+    avg_noise = np.mean(np.sum(np.abs(filtered_images - images), axis=(1, 2, 3)))
     return avg_noise
-
-
-
 
 def center_crop(x, crop_h, crop_w=None, resize_w=64):
     if crop_w is None:
