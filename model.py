@@ -146,7 +146,9 @@ class DCGAN(object):
 
         self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
         self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+        self.g_loss_heruistic = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+        self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+
 
         self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
@@ -154,6 +156,7 @@ class DCGAN(object):
         self.d_loss = self.d_loss_real + self.d_loss_fake
 
         self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
+        self.g_loss_heruistic_sum = scalar_summary("g_loss_heruistic", self.g_loss_heruistic)
         self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
         t_vars = tf.trainable_variables()
@@ -176,6 +179,9 @@ class DCGAN(object):
                           .minimize(self.d_loss, var_list=self.d_vars)
         g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
                           .minimize(self.g_loss, var_list=self.g_vars)
+        g_optim_heruistic = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+                          .minimize(self.g_loss_heruistic, var_list=self.g_vars)
+ 
         #d_optim = self.d_optim
         #g_optim = self.g_optim
         try:
@@ -185,7 +191,7 @@ class DCGAN(object):
             self.sess.run(init_op)
 
         self.g_sum = merge_summary([self.z_sum, self.d__sum,
-            self.G_sum, self.d_loss_fake_sum, self.g_loss_sum] + self.g_sums)
+            self.G_sum, self.d_loss_fake_sum, self.g_loss_sum, self.g_loss_heruistic_sum] + self.g_sums)
         self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum]+ self.d_real_sums + self.d_fake_sums)
         self.writer = SummaryWriter("./logs", self.sess.graph)
 
@@ -245,19 +251,33 @@ class DCGAN(object):
                         feed_dict={ self.images: batch_images, self.z: batch_z, self.y:batch_labels })
                     self.writer.add_summary(summary_str, counter)
 
-                    # Update G network
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z, self.y:batch_labels })
-                    self.writer.add_summary(summary_str, counter)
+                    if config.g_heruistic:
+                        # Update G network
+                        _, summary_str = self.sess.run([g_optim_heruistic, self.g_sum],
+                            feed_dict={ self.z: batch_z, self.y:batch_labels })
+                        self.writer.add_summary(summary_str, counter)
 
-                    # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                     _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z, self.y:batch_labels })
-                    self.writer.add_summary(summary_str, counter)
-                    
+                        # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                        _, summary_str = self.sess.run([g_optim_heruistic, self.g_sum],
+                            feed_dict={ self.z: batch_z, self.y:batch_labels })
+                        self.writer.add_summary(summary_str, counter)
+ 
+                    else:
+                        # Update G network
+                        _, summary_str = self.sess.run([g_optim, self.g_sum],
+                            feed_dict={ self.z: batch_z, self.y:batch_labels })
+                        self.writer.add_summary(summary_str, counter)
+
+                        # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                        _, summary_str = self.sess.run([g_optim, self.g_sum],
+                            feed_dict={ self.z: batch_z, self.y:batch_labels })
+                        self.writer.add_summary(summary_str, counter)
+                        
                     errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y:batch_labels})
                     errD_real = self.d_loss_real.eval({self.images: batch_images, self.y:batch_labels})
                     errG = self.g_loss.eval({self.z: batch_z, self.y:batch_labels})
+                    errG_heruistic = self.g_loss_heruistic.eval({self.z: batch_z, self.y:batch_labels})
+ 
                 else:
 
                     # Update D network
@@ -265,19 +285,32 @@ class DCGAN(object):
                         feed_dict={ self.images: batch_images, self.z: batch_z })
                     self.writer.add_summary(summary_str, counter)
 
-                    # Update G network
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z })
-                    self.writer.add_summary(summary_str, counter)
+                    if config.g_heruistic:
+                        # Update G network
+                        _, summary_str = self.sess.run([g_optim_heruistic, self.g_sum],
+                            feed_dict={ self.z: batch_z })
+                        self.writer.add_summary(summary_str, counter)
 
-                    # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z })
-                    self.writer.add_summary(summary_str, counter)
-                    
+                        # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                        _, summary_str = self.sess.run([g_optim_heruistic, self.g_sum],
+                            feed_dict={ self.z: batch_z })
+                        self.writer.add_summary(summary_str, counter)
+ 
+                    else:
+                        # Update G network
+                        _, summary_str = self.sess.run([g_optim, self.g_sum],
+                            feed_dict={ self.z: batch_z })
+                        self.writer.add_summary(summary_str, counter)
+
+                        # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                        _, summary_str = self.sess.run([g_optim, self.g_sum],
+                            feed_dict={ self.z: batch_z })
+                        self.writer.add_summary(summary_str, counter)
+                        
                     errD_fake = self.d_loss_fake.eval({self.z: batch_z})
                     errD_real = self.d_loss_real.eval({self.images: batch_images})
                     errG = self.g_loss.eval({self.z: batch_z})
+                    errG_heruistic = self.g_loss_heruistic.eval({self.z: batch_z})
 
                 # noise for training samples used
                 summary_str = self.sess.run(self.train_avg_noise_sum,
