@@ -99,6 +99,16 @@ def deconv2d(input_, output_shape,
             return deconv
        
 
+def tf_accuracy(t, val, batch_size):
+    if val >0.5:
+        elements = tf.greater(t, 0.5)
+    else:
+        elements = tf.less(t, 0.5)
+
+    as_ints = tf.cast(elements, tf.float32)
+    count = tf.reduce_sum(as_ints)
+    return count/batch_size
+
 def lrelu(x, leak=0.2, name="lrelu"):
   return tf.maximum(x, leak*x)
 
