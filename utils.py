@@ -245,3 +245,41 @@ def visualize(sess, dcgan, config, option, seq=None):
     #save_images(samples, [8, 8], './samples/close_match_%s.png' % (str(seq)))
     save_images(all_images, [8, 8 * 5], './samples/close_match_%s.png' % (str(seq).zfill(5)))
 
+def generate_2d_gmm_data(num_data=10000, num_cluster=8, means=None, std=None, weights=None):
+    if not means:
+        means_x = np.array([2 * np.cos(i*np.pi/4) for i in range(8)])
+        means_y = np.array([2 * np.sin(i*np.pi/4) for i in range(8)])
+        means = np.vstack((means_x, means_y)).transpose()
+        #print means
+    if not std:
+        std = np.array([0.02] * num_cluster).transpose()
+    if not weights:
+        weights = np.array([1./num_cluster] * num_cluster).transpose()
+
+    data = np.zeros([num_data, 2], dtype=np.float32)
+    clusters = np.zeros([num_data, ], dtype=np.float32)
+    for i in range(data.shape[0]):
+        cluster = np.random.choice(range(num_cluster), p=weights)
+        #print cluster
+        #print means[cluster]
+        #print means[cluster].flatten()
+        #print np.identity(2) * std[cluster]
+        sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
+                                               cov=np.identity(2) * std[cluster])
+        data[i] = sample.transpose()
+        clusters[i] = cluster
+    return np.clip(data, -4, 4), clusters 
+
+def plot_2d(data, title=None,  save_path=None):
+    """
+    data is a N * M matrix, where N is number of data, M is number of features (2)
+    """
+    import matplotlib.pyplot as plt
+    plt.plot(data[:,0], data[:,1], 'bo')
+    plt.grid(True)
+    if not title:
+        plt.title(title)
+    if not save_path:
+        plt.show()
+    else:
+        plt.savefig(save_path)
