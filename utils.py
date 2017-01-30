@@ -8,6 +8,7 @@ import random
 import pprint
 import scipy.misc
 import scipy.signal
+import matplotlib.pyplot as plt
 import numpy as np
 from time import gmtime, strftime
 
@@ -245,10 +246,10 @@ def visualize(sess, dcgan, config, option, seq=None):
     #save_images(samples, [8, 8], './samples/close_match_%s.png' % (str(seq)))
     save_images(all_images, [8, 8 * 5], './samples/close_match_%s.png' % (str(seq).zfill(5)))
 
-def generate_2d_gmm_data(num_data=10000, num_cluster=8, means=None, std=None, weights=None):
+def generate_2d_gmm_data(num_data=10000, num_cluster=2, means=None, std=None, weights=None):
     if not means:
-        means_x = np.array([2 * np.cos(i*np.pi/4) for i in range(8)])
-        means_y = np.array([2 * np.sin(i*np.pi/4) for i in range(8)])
+        means_x = np.array([1 * np.cos(i*2*np.pi/num_cluster) for i in range(num_cluster)])
+        means_y = np.array([1 * np.sin(i*2*np.pi/num_cluster) for i in range(num_cluster)])
         means = np.vstack((means_x, means_y)).transpose()
         #print means
     if not std:
@@ -274,8 +275,10 @@ def plot_2d(data, title=None,  save_path=None):
     """
     data is a N * M matrix, where N is number of data, M is number of features (2)
     """
-    import matplotlib.pyplot as plt
+    plt.close('all')
+    plt.figure()
     plt.plot(data[:,0], data[:,1], 'bo')
+    plt.axis([-2,2,-2,2])
     plt.grid(True)
     if not title:
         plt.title(title)

@@ -1,0 +1,2 @@
+python main.py --epoch 500 --dataset 2DGMM --sample_size 512 --batch_size 512 --is_train 1 --is_crop False --g_heruistic 0 --g_update 1 --z_dim 256 --c_dim 1 --learning_rate_d 1e-4 --learning_rate_g 1e-3
+

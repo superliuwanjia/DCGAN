@@ -114,13 +114,34 @@ def lrelu(x, leak=0.2, name="lrelu"):
 
 def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
-
+    print(shape)
     with tf.variable_scope(scope or "Linear"):
+        #matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
+        #                         tf.random_normal_initializer(stddev=stddev))
+        #matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
+        #                         tf.contrib.layers.variance_scaling_initializer(factor=0.8))
         matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-                                 tf.random_normal_initializer(stddev=stddev))
+                                 tf.contrib.layers.xavier_initializer())
+ 
         bias = tf.get_variable("bias", [output_size],
             initializer=tf.constant_initializer(bias_start))
         if with_w:
             return tf.matmul(input_, matrix) + bias, matrix, bias
         else:
             return tf.matmul(input_, matrix) + bias
+
+
+def orthogonal_initializer(scale = 1.1):
+    ''' From Lasagne and Keras. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
+    '''
+    print('Warning -- You have opted to use the orthogonal_initializer function')
+    def _initializer(shape, dtype=tf.float32):
+        flat_shape = (shape[0], np.prod(shape[1:]))
+        a = np.random.normal(0.0, 1.0, flat_shape)
+        u, _, v = np.linalg.svd(a, full_matrices=False)
+        # pick the one with the correct shape
+        q = u if u.shape == flat_shape else v
+        q = q.reshape(shape) #this needs to be corrected to float32
+        print('you have initialized one orthogonal matrix.')
+        return tf.constant(scale * q[:shape[0], :shape[1]], dtype=tf.float32)
+    return _initializer
