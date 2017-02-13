@@ -1,5 +1,5 @@
 #!/bin/bash
-#gmm_var
-#gmm_dimention
-gmm_seperation
-gmm_cluster
+#./gmm_var
+./gmm_dimention
+./gmm_seperation
+./gmm_cluster
