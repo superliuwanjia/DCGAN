@@ -1,1 +1,0 @@
-python main.py --epoch 5000 --dataset GMM --gmm_cluster 4 --gmm_dim 3 --sample_size 512 --batch_size 512 --is_train 1 --is_crop False --g_heruistic 0 --g_update 1 --z_dim 256 --c_dim 1 --visualize_interval=10 --learning_rate_d 1e-4 --learning_rate_g 1e-3 --log_dir logs_c_2_d_2 --sample_dir samples_c_2_d_2 --checkpoint_dir checkpoint_c_2_d_2

@@ -8,10 +8,19 @@ import random
 import pprint
 import scipy.misc
 import scipy.signal
+import scipy.cluster.vq
+import scipy.stats
+import sklearn.manifold
+import sklearn.mixture
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import numpy as np
 from time import gmtime, strftime
-
+import tensorflow as tf
+ds = tf.contrib.distributions
+slim = tf.contrib.slim
 pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
@@ -246,41 +255,239 @@ def visualize(sess, dcgan, config, option, seq=None):
     #save_images(samples, [8, 8], './samples/close_match_%s.png' % (str(seq)))
     save_images(all_images, [8, 8 * 5], './samples/close_match_%s.png' % (str(seq).zfill(5)))
 
-def generate_2d_gmm_data(num_data=10000, num_cluster=2, means=None, std=None, weights=None):
-    if not means:
-        means_x = np.array([1 * np.cos(i*2*np.pi/num_cluster) for i in range(num_cluster)])
-        means_y = np.array([1 * np.sin(i*2*np.pi/num_cluster) for i in range(num_cluster)])
-        means = np.vstack((means_x, means_y)).transpose()
-        #print means
-    if not std:
-        std = np.array([0.02] * num_cluster).transpose()
-    if not weights:
-        weights = np.array([1./num_cluster] * num_cluster).transpose()
+def generate_gmm_data_random_orthant(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
+    
+    if num_cluster == None:
+        num_cluster = np.power(2, dim)
+    assert num_cluster <= np.power(2, dim)
+    
+    num_clusters =range(num_cluster)
+    #random.shuffle(num_clusters)
+
+    means = []
+    for cluster in num_clusters:
+        s = list(bin(cluster)[2:].zfill(dim))
+        t = np.sign([int(c)-0.5 for c in s])
+        # print s
+        # print t
+        cluster_mean = scale * t
+        means.append(cluster_mean)
+
+    print "Cluster means: ", means
+    std = np.array([var] * num_cluster).transpose()
+    weights = np.array([1./num_cluster] * num_cluster).transpose()
+
+    data = np.zeros([num_data, dim], dtype=np.float32)
+    clusters = np.zeros([num_data, ], dtype=np.float32)
+    for i in range(data.shape[0]):
+        cluster = np.random.choice(range(num_cluster), p=weights)
+        sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
+                                               cov=np.identity(dim) * std[cluster])
+        data[i] = sample.transpose()
+        clusters[i] = cluster
+    return np.clip(data, -scale * 2, scale * 2), clusters 
+
+
+def generate_gmm_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
+    
+    if num_cluster == None:
+        num_cluster = np.power(2, dim-1)
+    assert num_cluster <= np.power(2, dim-1)
+    
+    num_clusters =range(num_cluster)
+    #random.shuffle(num_clusters)
+
+    means = []
+    for cluster in num_clusters:
+        s = list(bin(cluster)[2:].zfill(dim-1))
+        t = np.sign([int(c)-0.5 for c in s])
+        # print s
+        # print t
+        cluster_mean =  np.hstack((np.array([scale]), scale * t))
+        means.append(cluster_mean)
+
+    means = np.concatenate(means, axis=0)
+    means = means.reshape([num_cluster, dim])
+    print "Cluster means: ", means
+    std = np.array([var] * num_cluster).transpose()
+    weights = np.array([1./num_cluster] * num_cluster).transpose()
+
+    data = np.zeros([num_data, dim], dtype=np.float32)
+    clusters = np.zeros([num_data, ], dtype=np.float32)
+    for i in range(data.shape[0]):
+        cluster = np.random.choice(range(num_cluster), p=weights)
+        sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
+                                               cov=np.identity(dim) * std[cluster])
+        data[i] = sample.transpose()
+        clusters[i] = cluster
+    return np.clip(data, -3 * scale, 3 * scale), clusters, means
+
+def generate_gmm_grid_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
+    
+    if num_cluster == None:
+        num_cluster = np.power(2, dim-1)
+    #assert num_cluster <= np.power(2, dim-1)
+    
+    num_clusters =range(num_cluster)
+    #random.shuffle(num_clusters)
+
+    means = []
+    
+    for cluster in num_clusters:
+        
+        cluster_mean = np.array([])    
+        for i in range(dim):
+            cluster_mean = np.hstack((cluster_mean, np.array([1 + cluster%np.power(2,i+1)])))
+        means.append(cluster_mean * scale)
+
+
+    means = np.concatenate(means, axis=0)
+    means = means.reshape([num_cluster, dim])
+    print "Cluster means: ", means
+    std = np.array([var] * num_cluster).transpose()
+    weights = np.array([1./num_cluster] * num_cluster).transpose()
+
+    data = np.zeros([num_data, dim], dtype=np.float32)
+    clusters = np.zeros([num_data, ], dtype=np.float32)
+    for i in range(data.shape[0]):
+        cluster = np.random.choice(range(num_cluster), p=weights)
+        sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
+                                               cov=np.identity(dim) * std[cluster])
+        data[i] = sample.transpose()
+        clusters[i] = cluster
+    return np.clip(data, -3 * scale, 3 * scale), clusters, means
+
+
+def generate_gmm_dense_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
+    np.random.seed(0) 
+    if num_cluster == None:
+        num_cluster = np.power(2, dim-1)
+    #assert num_cluster <= np.power(2, dim-1)
+    
+    num_clusters =range(num_cluster)
+    #random.shuffle(num_clusters)
+
+    means = []
+    
+    for cluster in num_clusters:
+        cluster_mean = np.random.uniform(0, scale, size=(1, dim))        
+        means.append(cluster_mean)
+
+
+    means = np.concatenate(means, axis=0)
+    means = means.reshape([num_cluster, dim])
+    print "Cluster means: ", means
+    std = np.array([var] * num_cluster).transpose()
+    weights = np.array([1./num_cluster] * num_cluster).transpose()
+
+    data = np.zeros([num_data, dim], dtype=np.float32)
+    clusters = np.zeros([num_data, ], dtype=np.float32)
+    for i in range(data.shape[0]):
+        cluster = np.random.choice(range(num_cluster), p=weights)
+        sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
+                                               cov=np.identity(dim) * std[cluster])
+        data[i] = sample.transpose()
+        clusters[i] = cluster
+    return np.clip(data, -3 * scale, 3 * scale), clusters, means
+
+
+def generate_gmm_circle_data(num_data=50000,dim=2, num_cluster=8, scale=2, var=0.02):
+    if num_cluster == None:
+        num_cluster = 10
+    means_x = np.array([scale * np.cos(i*2*np.pi/num_cluster) for i in range(num_cluster)])
+    means_y = np.array([scale * np.sin(i*2*np.pi/num_cluster) for i in range(num_cluster)])
+    means = np.vstack((means_x, means_y)).transpose()
+    #print means
+    std = np.array([var] * num_cluster).transpose()
+    weights = np.array([1./num_cluster] * num_cluster).transpose()
 
     data = np.zeros([num_data, 2], dtype=np.float32)
     clusters = np.zeros([num_data, ], dtype=np.float32)
     for i in range(data.shape[0]):
         cluster = np.random.choice(range(num_cluster), p=weights)
-        #print cluster
-        #print means[cluster]
-        #print means[cluster].flatten()
-        #print np.identity(2) * std[cluster]
         sample = np.random.multivariate_normal(mean=means[cluster].flatten(),
                                                cov=np.identity(2) * std[cluster])
         data[i] = sample.transpose()
         clusters[i] = cluster
-    return np.clip(data, -4, 4), clusters 
+    return np.clip(data, -3 * scale, 3 * scale), clusters, means
 
-def plot_2d(data, title=None,  save_path=None):
+
+def estimate_optimal_cluster_size_gmm(data, clusters=range(1,10), run=10):
+    out = []
+    predict = []
+    gmms=[]
+    # calculate transformed distortion
+    for c in clusters:
+        gmm = sklearn.mixture.GaussianMixture(n_components=c, init_params='kmeans', n_init=run, covariance_type='full') 
+        #gmm = sklearn.mixture.VBGMM(n_components=c) 
+        gmm.fit(data)
+        gmms.append(gmm)
+        out.append(-gmm.bic(data))
+        predict.append(gmm.predict(data))
+        # find optimal cluster count
+    # print out
+    i = np.argmax(out)
+    print out
+    return clusters[i], predict[i],gmms[i]
+
+
+def estimate_optimal_cluster_size_jump(data, clusters=range(1,10), run=5):
+    p = data.shape[1]
+    y = int(p/2)
+    out = []
+    for _ in range(run):
+        d_t = [0]
+        # calculate transformed distortion
+        for c in clusters:
+            centroid, label = scipy.cluster.vq.kmeans2(data, c, iter=5)
+            t = np.array([data[i] - centroid[label[i]] for i in range(data.shape[0])])
+            d = np.mean(np.array([np.inner(i,i) for i in t])/p)
+            d_t.append(np.power(d, -p))
+
+        # find optimal cluster count
+        j = [d_t[k]-d_t[k-1] for k in range(1, len(d_t))]
+        out.append(clusters[np.argmax(j)])
+    return scipy.stats.mode(out)[0][0] 
+
+    
+def sample_mog(batch_size, n_mixture=8, std=0.01, radius=1.0):
+    thetas = np.linspace(0, 2 * np.pi, n_mixture)
+    xs, ys = radius * np.sin(thetas), radius * np.cos(thetas)
+    cat = ds.Categorical(tf.zeros(n_mixture))
+    comps = [ds.MultivariateNormalDiag([xi, yi], [std, std]) for xi, yi in zip(xs.ravel(), ys.ravel())]
+    data = ds.Mixture(cat, comps)
+    return data.sample_n(batch_size)
+
+
+def plot_2d(data, center=None, title=None, color=None,  save_path=None, axis=[-2,2,-2,2], transform=False):
     """
     data is a N * M matrix, where N is number of data, M is number of features (2)
     """
+    data_size = data.shape[0]
+    if not (center == None):
+        center_size = center.shape[0]
+        data = np.vstack((data, center))
+        
+    if transform:
+        isomap = sklearn.manifold.Isomap(n_jobs=-1)
+        data = isomap.fit_transform(data)
+
     plt.close('all')
     plt.figure()
-    plt.plot(data[:,0], data[:,1], 'bo')
-    plt.axis([-2,2,-2,2])
+    if not (center == None):
+        center = data[data_size:data_size+center_size,:]
+        data = data[0:data_size,:]
+    if not (color == None):
+        #color = color.reshape([color.shape[0], 1])
+        plt.scatter(data[:,0], data[:,1], c=color, marker="+")
+    else:
+        plt.scatter(data[:,0], data[:,1], marker="+")
+    if not (color == None):
+        plt.scatter(center[:,0], center[:,1], marker=(5,0), c="k")
+    if not (axis == None):
+        plt.axis(axis)
     plt.grid(True)
-    if not title:
+    if not (title == None):
         plt.title(title)
     if not save_path:
         plt.show()

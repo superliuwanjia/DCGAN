@@ -112,15 +112,18 @@ def tf_accuracy(t, val, batch_size):
 def lrelu(x, leak=0.2, name="lrelu"):
   return tf.maximum(x, leak*x)
 
-def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
+def linear(input_, output_size, scope=None, init_type="xavier", stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
     print(shape)
     with tf.variable_scope(scope or "Linear"):
-        #matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-        #                         tf.random_normal_initializer(stddev=stddev))
-        #matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-        #                         tf.contrib.layers.variance_scaling_initializer(factor=0.8))
-        matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
+        if init_type == "normal":
+            matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
+                                 tf.random_normal_initializer(stddev=stddev))
+        elif init_type == "orthogonal":
+            matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
+                                 tf.orthogonal_initializer(gain=1.4))
+        elif init_type == "xavier":
+            matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
                                  tf.contrib.layers.xavier_initializer())
  
         bias = tf.get_variable("bias", [output_size],
