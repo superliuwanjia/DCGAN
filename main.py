@@ -8,6 +8,7 @@ from utils import pp, visualize, to_json
 import tensorflow as tf
 
 flags = tf.app.flags
+flags.DEFINE_string("activation", "relu", "nonlinearity")
 flags.DEFINE_integer("epoch", 100, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate_g", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("learning_rate_d", 0.0002, "Learning rate of for adam [0.0002]")
@@ -90,7 +91,7 @@ def main(_):
 
         # Below is codes for visualization
         OPTION = 1
-        visualize(sess, dcgan, FLAGS, OPTION)
+        #visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':
     tf.app.run()

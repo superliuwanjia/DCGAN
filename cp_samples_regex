@@ -1,0 +1,3 @@
+#!/bin/bash
+./cp_samples $(find $1 -maxdepth 0)
+

@@ -109,8 +109,8 @@ def tf_accuracy(t, val, batch_size):
     count = tf.reduce_sum(as_ints)
     return count/batch_size
 
-def lrelu(x, leak=0.2, name="lrelu"):
-  return tf.maximum(x, leak*x)
+def lrelu(x, leak=0.0, name="lrelu"):
+    return tf.maximum(x, leak*x)
 
 def linear(input_, output_size, scope=None, init_type="xavier", stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()

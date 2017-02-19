@@ -24,6 +24,9 @@ slim = tf.contrib.slim
 pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
+def switch_state_distribution(switch_state):
+    switch_state = [int(state) for state in switch_state]
+    return [i for i, state in enumerate(switch_state) if state]
 
 def get_image(image_path, image_size, is_crop=True, resize_w=64, is_grayscale = False):
     return transform(imread(image_path, is_grayscale), image_size, is_crop, resize_w)

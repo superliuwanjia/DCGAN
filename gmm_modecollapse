@@ -1,0 +1,7 @@
+#!/bin/bash
+# var
+
+# G: 2x128, Relu
+# D: 1X128, Relu
+python main.py --epoch 500 --network GMM_MEDIUM_RELU --dataset GMM_CIRCLE --init_type xavier --gmm_cluster 4 --gmm_scale 2 --gmm_dim 2 --sample_size 512 --batch_size 512 --is_train 1 --is_crop False --g_heruistic 1 --g_update 1 --z_dim 256 --c_dim 1 --visualize_interval 10 --learning_rate_d 1e-4 --learning_rate_g 1e-4 --log_dir logs --sample_dir samples --checkpoint_dir checkpoint --gmm_var 0.02
+#python main.py --epoch 500 --network GMM_MEDIUM_RELU --dataset GMM_CIRCLE --init_type xavier --gmm_cluster 4 --gmm_scale 2 --gmm_dim 2 --sample_size 512 --batch_size 512 --is_train 1 --is_crop False --g_heruistic 1 --g_update 1 --z_dim 16 --c_dim 1 --visualize_interval 10 --learning_rate_d 1e-4 --learning_rate_g 1e-4 --log_dir logs_relu_32_c_4 --sample_dir samples_relu_32_c_4 --checkpoint_dir checkpoint_relu_32_c_4 --gmm_var 0.02

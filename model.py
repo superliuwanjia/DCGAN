@@ -71,8 +71,14 @@ class DCGAN(object):
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
         self.process_input()
+        self.prepare_nonlin()
         self.build_model()
-
+    def prepare_nonlin(self):
+        if self.flags.activation == "relu":
+            self.nl = lrelu
+        elif self.flags.activation == "tanh":
+            self.nl = tf.nn.tanh
+        
     def process_input(self):
         if not os.path.exists(self.flags.sample_dir):
             os.mkdir(self.flags.sample_dir)
@@ -130,11 +136,13 @@ class DCGAN(object):
                                     name='real_images')
         self.sample_images= tf.placeholder(tf.float32, [self.sample_size] + [self.output_height, self.output_width, self.c_dim],
                                         name='sample_images')
+
         self.z = tf.placeholder(tf.float32, [None, self.z_dim],
                                 name='z')
 
         self.z_sum = histogram_summary("z", self.z)
 
+        self.relu_state = []
         # noise of samples generated, approximated as I - medianfilt(I)   
         self.avg_noise = tf.placeholder(tf.float32, None, name='avg_noise')
         
@@ -383,10 +391,18 @@ class DCGAN(object):
  
                 else:
                     
-                    d_fake, samples, d_loss, g_loss, g_loss_heruistic, g_loss_llr = self.sess.run(
-                            [self.D_, self.sampler, self.d_loss, self.g_loss, self.g_loss_heruistic, self.g_loss_llr],
+                    result = list(self.sess.run(
+                            [self.D_, self.sampler, self.d_loss, self.g_loss, self.g_loss_heruistic, self.g_loss_llr] + self.relu_state,
                             feed_dict={self.z: sample_z, self.images: sample_images}
-                    )
+                    ))
+                    d_fake = result[0]
+                    samples = result[1]
+                    d_loss = result[2]
+                    g_loss = result[3]
+                    g_loss_heruistic = result[4]
+                    g_loss_llr = result[5]
+                    relu_state = result[6:]
+
                     errD_fake = self.d_loss_fake.eval({self.z: batch_z})
                     errD_real = self.d_loss_real.eval({self.images: batch_images})
                     errG = self.g_loss.eval({self.z: batch_z, self.images: batch_images})
@@ -424,31 +440,7 @@ class DCGAN(object):
                                     './{}/train_{:06d}.png'.format(config.sample_dir, counter))
                     elif config.dataset[0:3] == "GMM":
                         samples = samples.reshape([self.batch_size, self.flags.gmm_dim])
-
-                        if self.flags.cluster_est == "gmm":
-                            estimated_clusters, label, gmm = estimate_optimal_cluster_size_gmm(samples, clusters=range(1,self.flags.gmm_cluster+1))
-                            # samples, label = gmm.sample(self.batch_size)
-                        elif self.flags.cluster_est == "jump":
-                            estimated_clusters, label = estimate_optimal_cluster_size_jump(samples, clusters=range(1,self.flags.gmm_cluster+1))
-
-                        summary_str = self.sess.run(self.est_clusters_sum,
-                            feed_dict={self.est_clusters:estimated_clusters})
-                        self.writer.add_summary(summary_str, counter)
-
-                        if not np.max(label) == 0:
-                            colors = label / (np.max(label) + 0.0)
-                        else:
-                            colors = label
-                        # self.cluster_mean=None
-                        if self.flags.gmm_dim > 2:
-
-                            axis=[-2, self.flags.gmm_scale+2,-2,self.flags.gmm_scale+2]
-                            plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=None, color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=True)  
-                        else:    
-                            if self.flags.dataset == "GMM_DENSE":
-                                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-1,self.flags.gmm_scale+2,-1,self.flags.gmm_scale+2], color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
-                            else:
-                                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-4,4,-4,4], color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+                        self.analyze_gmm(counter, samples, relu_state)
                     else:
                         save_images(samples, [8, 8],
                                         './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
@@ -481,6 +473,57 @@ class DCGAN(object):
  
 
                 counter += 1
+    def analyze_gmm(self, counter, samples, relu_state=None):
+        config = self.flags
+        if self.flags.cluster_est == "gmm":
+            estimated_clusters, label, gmm = estimate_optimal_cluster_size_gmm(samples, clusters=range(1,self.flags.gmm_cluster+1))
+            # samples, label = gmm.sample(self.batch_size)
+        elif self.flags.cluster_est == "jump":
+            estimated_clusters, label = estimate_optimal_cluster_size_jump(samples, clusters=range(1,self.flags.gmm_cluster+1))
+
+        summary_str = self.sess.run(self.est_clusters_sum,
+            feed_dict={self.est_clusters:estimated_clusters})
+        self.writer.add_summary(summary_str, counter)
+
+        if not np.max(label) == 0:
+            colors = label / (np.max(label) + 0.0)
+        else:
+            colors = label
+# self.cluster_mean=None
+        if self.flags.gmm_dim > 2:
+
+            axis=[-2, self.flags.gmm_scale+2,-2,self.flags.gmm_scale+2]
+            plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=None, color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=True)  
+        else:    
+            if self.flags.dataset == "GMM_DENSE":
+                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-1,self.flags.gmm_scale+2,-1,self.flags.gmm_scale+2], color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+            else:
+                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-4,4,-4,4], color=colors,save_path='./{}/train_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+        # relu state distribution
+        if relu_state and len(relu_state) > 0:
+            relu_state = (np.hstack(relu_state)>0).astype(int)
+            relu_state_decimal = []
+            for rs in relu_state:
+                # convert bit vector to decimal
+                relu_state_decimal.append( \
+                    rs.dot(1 << np.arange(rs.shape[-1] -1, -1, -1)))
+        label = relu_state_decimal
+        if not np.max(label) == 0:
+            colors = label / (np.max(label) + 0.0)
+        else:
+            colors = label
+# self.cluster_mean=None
+        if self.flags.gmm_dim > 2:
+
+            axis=[-2, self.flags.gmm_scale+2,-2,self.flags.gmm_scale+2]
+            plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=None, color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=True)  
+        else:    
+            if self.flags.dataset == "GMM_DENSE":
+                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-1,self.flags.gmm_scale+2,-1,self.flags.gmm_scale+2], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+            else:
+                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-4,4,-4,4], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+             
+ 
 
     def discriminator(self, image, y=None, reuse=False):
         init = self.flags.init_type
@@ -492,14 +535,14 @@ class DCGAN(object):
                 if self.flags.network == "GMM_LARGE":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     h0_, h0_w, h0_b = linear(image,128,'d_h0_lin',init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
                     h1_, h1_w, h1_b = linear(h0,128,'d_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
  
                     h2_, h2_w, h2_b = linear(h1,128,'d_h2_lin', init_type=init, with_w=True)
-                    h2 = tf.nn.tanh(h2_)
+                    h2 = self.nl(h2_)
                     h3_, h3_w, h3_b = linear(h2,128,'d_h3_lin', init_type=init, with_w=True)
-                    h3 = tf.nn.tanh(h3_)
+                    h3 = self.nl(h3_)
  
                     h4, h4_w, h4_b = linear(h3,1,'d_h4_lin', init_type=init, with_w=True)
                     layers = [h0,h1, h2, h3, h4]
@@ -507,17 +550,20 @@ class DCGAN(object):
                 elif self.flags.network == "GMM_MEDIUM":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     h0_, h0_w, h0_b = linear(image,128,'d_h0_lin', init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
                     h1_, h1_w, h1_b = linear(h0,128,'d_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
  
                     h2, h2_w, h2_b = linear(h1,1,'d_h2_lin', init_type=init, with_w=True)
                     layers = [h0, h1, h2]
                 elif self.flags.network == "GMM_MEDIUM_RELU":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
-                    h0_, h0_w, h0_b = linear(image,1,'d_h0_lin', init_type=init, with_w=True)
-                    h0 = lrelu(h0_)
-                    layers = [h0]
+                    h0_, h0_w, h0_b = linear(image,128,'d_h0_lin', init_type=init, with_w=True)
+                    h0 = self.nl(h0_)
+                    #h0 = tf.nn.tanh(h0_)
+
+                    h1, h1_w, h1_b = linear(h0,1,'d_h1_lin', init_type=init, with_w=True)
+                    layers = [h0, h1]
  
                 elif self.flags.network == "DCGAN": 
                     h0 = lrelu(h0_)
@@ -581,16 +627,19 @@ class DCGAN(object):
             if not self.y_dim:
                 if self.flags.network == "GMM_LARGE":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
                     
                     h2_, h2_w,h2_b = linear(h1, 128, 'g_h2_lin', init_type=init, with_w=True)
-                    h2 = tf.nn.tanh(h2_)
+                    h2 = self.nl(h2_)
                     h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
-                    h3 = tf.nn.tanh(h3_)
- 
+                    h3 = self.nl(h3_)
+                    self.relu_state.append(h0_)
+                    self.relu_state.append(h1_)         
+                    self.relu_state.append(h2_) 
+                    self.relu_state.append(h3_) 
                     h4, h4_w, h4_b = linear(h3,self.flags.gmm_dim, 'g_h4_lin', init_type=init, with_w=True) 
                     h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
                     layers = [h0, h1, h2, h3, h4]
@@ -602,10 +651,10 @@ class DCGAN(object):
                     return h4
                 elif self.flags.network == "GMM_MEDIUM":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
                     
  
                     h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
@@ -620,11 +669,12 @@ class DCGAN(object):
                     return h2
                 elif self.flags.network == "GMM_MEDIUM_RELU":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = lrelu(h0_, leak=0)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = lrelu(h1_,leak=0)
-                    
+                    h1 = self.nl(h1_)
+                    self.relu_state.append(h0_)
+                    self.relu_state.append(h1_)         
  
                     h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
                     h2 = tf.reshape(h2, [-1, self.output_height, self.output_width, self.c_dim])
@@ -699,15 +749,15 @@ class DCGAN(object):
                 if self.flags.network == "GMM_LARGE":
 
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
                     
                     h2_, h2_w,h2_b = linear(h1, 128, 'g_h2_lin', init_type=init, with_w=True)
-                    h2 = tf.nn.tanh(h2_)
+                    h2 = self.nl(h2_)
                     h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
-                    h3 = tf.nn.tanh(h3_)
+                    h3 = self.nl(h3_)
  
                     h4, h4_w, h4_b = linear(h3,self.flags.gmm_dim, 'g_h4_lin', init_type=init, with_w=True) 
                     h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
@@ -715,10 +765,10 @@ class DCGAN(object):
                     return h4
                 elif self.flags.network == "GMM_MEDIUM":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = tf.nn.tanh(h0_)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = tf.nn.tanh(h1_)
+                    h1 = self.nl(h1_)
                     
  
                     h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
@@ -727,10 +777,10 @@ class DCGAN(object):
                     return h2
                 elif self.flags.network == "GMM_MEDIUM_RELU":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = lrelu(h0_)
+                    h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = lrelu(h1_)
+                    h1 = self.nl(h1_)
                     
  
                     h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 

@@ -1,0 +1,13 @@
+#!/bin/bash
+for var in "$@"
+do
+    rm -rf temp/"$var"
+    mkdir temp/"$var"
+    cp "$var"/dataset.png temp/"$var"
+    cp "$var"/train_000000.png temp/"$var"
+    cp "$var"/train_010000.png temp/"$var"
+    cp "$var"/train_020000.png temp/"$var"
+    cp "$var"/train_030000.png temp/"$var"
+    cp "$var"/train_040000.png temp/"$var"
+    cp "$var"/train_048490.png temp/"$var"
+done
