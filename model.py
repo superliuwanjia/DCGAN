@@ -507,23 +507,23 @@ class DCGAN(object):
                 # convert bit vector to decimal
                 relu_state_decimal.append( \
                     rs.dot(1 << np.arange(rs.shape[-1] -1, -1, -1)))
-        label = relu_state_decimal
-        if not np.max(label) == 0:
-            colors = label / (np.max(label) + 0.0)
-        else:
-            colors = label
-# self.cluster_mean=None
-        if self.flags.gmm_dim > 2:
-
-            axis=[-2, self.flags.gmm_scale+2,-2,self.flags.gmm_scale+2]
-            plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=None, color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=True)  
-        else:    
-            if self.flags.dataset == "GMM_DENSE":
-                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-1,self.flags.gmm_scale+2,-1,self.flags.gmm_scale+2], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+            label = relu_state_decimal
+            if not np.max(label) == 0:
+                colors = label / (np.max(label) + 0.0)
             else:
-                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-4,4,-4,4], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
-             
- 
+                colors = label
+# self.cluster_mean=None
+            if self.flags.gmm_dim > 2:
+
+                axis=[-2, self.flags.gmm_scale+2,-2,self.flags.gmm_scale+2]
+                plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=None, color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=True)  
+            else:    
+                if self.flags.dataset == "GMM_DENSE":
+                    plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-1,self.flags.gmm_scale+2,-1,self.flags.gmm_scale+2], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+                else:
+                    plot_2d(samples, center=self.cluster_mean, title="Minibatch: " + str(counter), axis=[-4,4,-4,4], color=colors,save_path='./{}/relu_state_{:06d}.png'.format(config.sample_dir, counter), transform=False)  
+                 
+     
 
     def discriminator(self, image, y=None, reuse=False):
         init = self.flags.init_type
@@ -532,6 +532,28 @@ class DCGAN(object):
                 scope.reuse_variables()
 
             if not self.y_dim:
+                if self.flags.network == "GMM_XLARGE":
+                    image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
+                    h0_, h0_w, h0_b = linear(image,128,'d_h0_lin',init_type=init, with_w=True)
+                    h0 = self.nl(h0_)
+                    h1_, h1_w, h1_b = linear(h0,128,'d_h1_lin', init_type=init, with_w=True)
+                    h1 = self.nl(h1_)
+ 
+                    h2_, h2_w, h2_b = linear(h1,128,'d_h2_lin', init_type=init, with_w=True)
+                    h2 = self.nl(h2_)
+                    h3_, h3_w, h3_b = linear(h2,128,'d_h3_lin', init_type=init, with_w=True)
+                    h3 = self.nl(h3_)
+                    h4_, h4_w, h4_b = linear(h3,128,'d_h4_lin',init_type=init, with_w=True)
+                    h4 = self.nl(h4_)
+                    h5_, h5_w, h5_b = linear(h4,128,'d_h5_lin', init_type=init, with_w=True)
+                    h5 = self.nl(h5_)
+                    h6_, h6_w, h6_b = linear(h5,128,'d_h6_lin', init_type=init, with_w=True)
+                    h6 = self.nl(h6_)
+                    h7_, h7_w, h7_b = linear(h6,128,'d_h7_lin', init_type=init, with_w=True)
+                    h7 = self.nl(h7_)
+ 
+                    h8, h8_w, h8_b = linear(h7,1,'d_h8_lin', init_type=init, with_w=True)
+                    layers = [h0,h1, h2, h3, h4, h5, h6, h7, h8]
                 if self.flags.network == "GMM_LARGE":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     h0_, h0_w, h0_b = linear(image,128,'d_h0_lin',init_type=init, with_w=True)
@@ -546,7 +568,6 @@ class DCGAN(object):
  
                     h4, h4_w, h4_b = linear(h3,1,'d_h4_lin', init_type=init, with_w=True)
                     layers = [h0,h1, h2, h3, h4]
-                
                 elif self.flags.network == "GMM_MEDIUM":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     h0_, h0_w, h0_b = linear(image,128,'d_h0_lin', init_type=init, with_w=True)
@@ -556,7 +577,7 @@ class DCGAN(object):
  
                     h2, h2_w, h2_b = linear(h1,1,'d_h2_lin', init_type=init, with_w=True)
                     layers = [h0, h1, h2]
-                elif self.flags.network == "GMM_MEDIUM_RELU":
+                elif self.flags.network == "GMM_SMALL":
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     h0_, h0_w, h0_b = linear(image,128,'d_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
@@ -636,10 +657,39 @@ class DCGAN(object):
                     h2 = self.nl(h2_)
                     h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
                     h3 = self.nl(h3_)
-                    self.relu_state.append(h0_)
-                    self.relu_state.append(h1_)         
-                    self.relu_state.append(h2_) 
-                    self.relu_state.append(h3_) 
+                    h4_, h4_w,h4_b = linear(h3, 128, 'g_h4_lin', init_type=init, with_w=True)
+                    h4 = self.nl(h4_)
+                    h5_, h5_w,h5_b = linear(h4, 128, 'g_h5_lin', init_type=init, with_w=True)
+                    h5 = self.nl(h5_)
+                    h6_, h6_w,h6_b = linear(h5, 128, 'g_h6_lin', init_type=init, with_w=True)
+                    h6 = self.nl(h6_)
+                    h7_, h7_w,h7_b = linear(h6, 128, 'g_h7_lin', init_type=init, with_w=True)
+                    h7 = self.nl(h7_)
+ 
+                    h8, h8_w, h8_b = linear(h7,self.flags.gmm_dim, 'g_h8_lin', init_type=init, with_w=True) 
+                    h8 = tf.reshape(h8, [-1, self.output_height, self.output_width, self.c_dim])
+ 
+                    layers = [h0, h1, h2, h3, h4, h5, h6, h7, h8]
+               
+                    self.g_sums=[]
+                    for layer in layers:
+                        self.g_sums.append(tf.histogram_summary("g_sum_"+layer.name, layer))
+
+                    return layers[-1]
+                elif self.flags.network == "GMM_MEDIUM":
+                    h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
+                    h0 = self.nl(h0_)
+         
+                    h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
+                    h1 = self.nl(h1_)
+          
+                    h2_, h2_w,h2_b = linear(h1, 128, 'g_h2_lin', init_type=init, with_w=True)
+                    h2 = self.nl(h2_)
+          
+                    h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
+                    h3 = self.nl(h3_)
+                    
+ 
                     h4, h4_w, h4_b = linear(h3,self.flags.gmm_dim, 'g_h4_lin', init_type=init, with_w=True) 
                     h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
                     layers = [h0, h1, h2, h3, h4]
@@ -648,14 +698,16 @@ class DCGAN(object):
                     for layer in layers:
                         self.g_sums.append(tf.histogram_summary("g_sum_"+layer.name, layer))
 
-                    return h4
-                elif self.flags.network == "GMM_MEDIUM":
+
+                    return layers[-1]
+                elif self.flags.network == "GMM_SMALL":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
                     h1 = self.nl(h1_)
-                    
+                    #self.relu_state.append(h0_)
+                    #self.relu_state.append(h1_)         
  
                     h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
                     h2 = tf.reshape(h2, [-1, self.output_height, self.output_width, self.c_dim])
@@ -666,26 +718,7 @@ class DCGAN(object):
                         self.g_sums.append(tf.histogram_summary("g_sum_"+layer.name, layer))
 
 
-                    return h2
-                elif self.flags.network == "GMM_MEDIUM_RELU":
-                    h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
-                    h0 = self.nl(h0_)
-         
-                    h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
-                    h1 = self.nl(h1_)
-                    self.relu_state.append(h0_)
-                    self.relu_state.append(h1_)         
- 
-                    h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
-                    h2 = tf.reshape(h2, [-1, self.output_height, self.output_width, self.c_dim])
-                    layers = [h0, h1, h2]
-               
-                    self.g_sums=[]
-                    for layer in layers:
-                        self.g_sums.append(tf.histogram_summary("g_sum_"+layer.name, layer))
-
-
-                    return h2
+                    return layers[-1]
  
                 elif self.flags.network == "DCGAN": 
                     s = self.output_height
@@ -758,24 +791,40 @@ class DCGAN(object):
                     h2 = self.nl(h2_)
                     h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
                     h3 = self.nl(h3_)
+                    h4_, h4_w,h4_b = linear(h3, 128, 'g_h4_lin', init_type=init, with_w=True)
+                    h4 = self.nl(h4_)
+                    h5_, h5_w,h5_b = linear(h4, 128, 'g_h5_lin', init_type=init, with_w=True)
+                    h5 = self.nl(h5_)
+                    h6_, h6_w,h6_b = linear(h5, 128, 'g_h6_lin', init_type=init, with_w=True)
+                    h6 = self.nl(h6_)
+                    h7_, h7_w,h7_b = linear(h6, 128, 'g_h7_lin', init_type=init, with_w=True)
+                    h7 = self.nl(h7_)
  
-                    h4, h4_w, h4_b = linear(h3,self.flags.gmm_dim, 'g_h4_lin', init_type=init, with_w=True) 
-                    h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
+                    h8, h8_w, h8_b = linear(h7,self.flags.gmm_dim, 'g_h8_lin', init_type=init, with_w=True) 
+                    h8 = tf.reshape(h8, [-1, self.output_height, self.output_width, self.c_dim])
  
-                    return h4
+                    return h8
                 elif self.flags.network == "GMM_MEDIUM":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
          
                     h1_, h1_w,h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
                     h1 = self.nl(h1_)
+          
+                    h2_, h2_w,h2_b = linear(h1, 128, 'g_h2_lin', init_type=init, with_w=True)
+                    h2 = self.nl(h2_)
+          
+                    h3_, h3_w,h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
+                    h3 = self.nl(h3_)
                     
  
-                    h2, h2_w, h2_b = linear(h1,self.flags.gmm_dim, 'g_h2_lin', init_type=init, with_w=True) 
-                    h2 = tf.reshape(h2, [-1, self.output_height, self.output_width, self.c_dim])
+                    h4, h4_w, h4_b = linear(h3,self.flags.gmm_dim, 'g_h4_lin', init_type=init, with_w=True) 
+                    h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
+                    layers = [h0, h1, h2, h3, h4]
+               
  
-                    return h2
-                elif self.flags.network == "GMM_MEDIUM_RELU":
+                    return h4
+                elif self.flags.network == "GMM_SMALL":
                     h0_, h0_w,h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
          
