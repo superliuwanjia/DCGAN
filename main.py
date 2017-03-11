@@ -21,7 +21,7 @@ flags.DEFINE_integer("output_width", 64, "The width of the output images (2nd di
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_integer("z_dim", 100, "Dimension of z. [100]")
 flags.DEFINE_integer("gmm_cluster", None, "number of gmm cluster")
-flags.DEFINE_integer("gmm_dim", 2, "dimention of gmm data")
+flags.DEFINE_integer("gmm_dim", 2, "dimension of gmm data")
 flags.DEFINE_float("gmm_var", 0.02, "variance of generated gmm clusters")
 flags.DEFINE_float("gmm_scale", 2, "scale of generated gmm clusters")
 flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
