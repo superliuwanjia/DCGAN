@@ -431,7 +431,7 @@ def estimate_optimal_cluster_size_gmm(data, clusters=range(1,10), run=10):
     # print out
     i = np.argmax(out)
     print out
-    return clusters[i], predict[i],gmms[i]
+    return clusters[i], predict[i], gmms[i]
 
 
 def estimate_optimal_cluster_size_jump(data, clusters=range(1,10), run=5):
