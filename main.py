@@ -34,7 +34,7 @@ flags.DEFINE_string("init_type", "orthogonal", "How to initialize linear layer w
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
-flags.DEFINE_integer("visualize_interval", 5, "True for visualizing, False for nothing [False]")
+flags.DEFINE_integer("visualize_interval", 5, "save generated samples every [5] batches")
 flags.DEFINE_integer("g_heruistic", 0, "True for -log(D) g loss ")
 flags.DEFINE_integer("g_update", 1, "Two generator update for 1 discriminator update")
 FLAGS = flags.FLAGS

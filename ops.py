@@ -36,6 +36,7 @@ class batch_norm(object):
                                             scope=self.name)
 
 
+# No usage found for this function
 def binary_cross_entropy(preds, targets, name=None):
     """Computes binary cross entropy given `preds`.
 
@@ -62,6 +63,8 @@ def conv_cond_concat(x, y):
     y_shapes = y.get_shape()
     return tf.concat(3, [x, y*tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])])
 
+
+# Note that the parameters of conv2d() and deconv2d() are different
 def conv2d(input_, output_dim, 
            k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
            name="conv2d"):
