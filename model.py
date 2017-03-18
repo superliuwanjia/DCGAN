@@ -80,63 +80,82 @@ class DCGAN(object):
         self.build_model()
 
     def prepare_nonlin(self):
+        '''
+        Consider two kinds of nonlinearities: relu and tanh
+        :return:
+        '''
         if self.flags.activation == "relu":
             self.nl = lrelu
         elif self.flags.activation == "tanh":
             self.nl = tf.nn.tanh
 
     def process_input(self):
+        '''
+        Before feeding input data into model, dealing with input w.r.t. different types of data
+        :return:
+        '''
         if not os.path.exists(self.flags.sample_dir):
             os.mkdir(self.flags.sample_dir)
+
+        # Load MNIST data
         if self.dataset_name == 'mnist':
             self.data_X, self.data_y = self.load_mnist()
+
+        # Generate GMM data
         elif self.dataset_name == 'GMM':
             data, label, mean = generate_gmm_data(dim=self.flags.gmm_dim, num_cluster=self.flags.gmm_cluster,
                                                   var=self.flags.gmm_var, scale=self.flags.gmm_scale)
+
+            # TODO: Why do we not set self.c_dim=1 explicitly here?
             self.data_X = data.reshape([data.shape[0], 1, self.flags.gmm_dim, 1])
             self.output_height = 1
             self.cluster_mean = mean
             self.output_width = self.flags.gmm_dim
             plot_2d(data[0:1000, :], save_path=self.flags.sample_dir + "/dataset.png", axis=None, transform=False)
+
+        # Generate GMM Circle data
         elif self.dataset_name == "GMM_CIRCLE":
             data, label, mean = generate_gmm_circle_data(num_cluster=self.flags.gmm_cluster, var=self.flags.gmm_var,
                                                          scale=self.flags.gmm_scale)
+
+            # TODO: Why do we not set self.c_dim=1 explicitly here?
             self.data_X = data.reshape([data.shape[0], 1, self.flags.gmm_dim, 1])
             self.output_height = 1
             self.cluster_mean = mean
             self.output_width = 2
             plot_2d(data[0:1000, :], save_path=self.flags.sample_dir + "/dataset.png", axis=None, transform=False)
+
+        # Generate GMM dense data (need to use gmm_scale argument)
         elif self.dataset_name == "GMM_DENSE":
             data, label, mean = generate_gmm_dense_data(dim=self.flags.gmm_dim, num_cluster=self.flags.gmm_cluster,
                                                         var=self.flags.gmm_var, scale=self.flags.gmm_scale)
+
+            # TODO: Why do we not set self.c_dim=1 explicitly here?
             self.data_X = data.reshape([data.shape[0], 1, self.flags.gmm_dim, 1])
             self.output_height = 1
             self.cluster_mean = mean
             self.output_width = 2
-
             plot_2d(data[0:1000, :], save_path=self.flags.sample_dir + "/dataset.png", transform=False,
                     axis=[-2, self.flags.gmm_scale + 2, -2, self.flags.gmm_scale + 2])
+
+        # Processing any arbitrary input images
         else:
+            # The method glob() will return a list of pathnames which mataches the path patterns
             data = glob(os.path.join("./data", self.dataset_name, "*.jpg"))
             batch_files = data[0:len(data) - self.num_test_images]
 
+            # The method get_image() will return a processed image
             batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height,
                                is_grayscale=self.is_grayscale) for batch_file in batch_files]
+
+            # Determine if it is grayscale or colored image
             if (self.is_grayscale):
                 self.data_X = np.array(batch).astype(np.float32)[:, :, :, None]
             else:
                 self.data_X = np.array(batch).astype(np.float32)
-                # print(np.max(self.data_X))
-                # print(np.min(self.data_X))
-                # save part of the dataset as test images
-                # batch_files_test = data[len(data) - self.num_test_images:]
-                # batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height, is_grayscale = self.is_grayscale) for batch_file in batch_files_test]
-                # if (self.is_grayscale):
-                #    self.data_X_test = np.array(batch).astype(np.float32)[:, :, :, None]
-                # else:
-                #    self.data_X_test = np.array(batch).astype(np.float32)
 
         # Intensity normalized training images
+        # TODO: But it is not used at all
         self.data_X_normalized = self.data_X / np.linalg.norm(
             self.data_X.reshape([self.data_X.shape[0], np.prod(self.data_X.shape[1:4])]),
             axis=1).reshape([self.data_X.shape[0], 1, 1, 1])
@@ -147,12 +166,16 @@ class DCGAN(object):
         :return:
         """
         # Set placeholders for y, images, sample_images and z
-        # y stands for lablels of a batch of images
+        # y stands for labels of a batch of images
         if self.y_dim:
+            # TODO: the placeholder 'self.y' is fed with both 'self.batch_size' and 'self.sample_size'
+            # TODO: The right way to fix it is like 'self.z' e.g. [None, self.y_dim]
             self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 
         self.images = tf.placeholder(tf.float32, [self.batch_size] +
                                      [self.output_height, self.output_width, self.c_dim], name='real_images')
+
+        # self.sample_images is not used
         self.sample_images = tf.placeholder(tf.float32, [self.sample_size] +
                                             [self.output_height, self.output_width, self.c_dim], name='sample_images')
 
@@ -176,6 +199,7 @@ class DCGAN(object):
         self.est_clusters_sum = scalar_summary("estimated_clusters_count_summary", self.est_clusters)
 
         # Initialize the average image of all images used during training
+        # TODO: Instance attributes should be defined in the __init__() method
         self.cum_image = np.zeros([1, self.output_height, self.output_width, self.c_dim])
 
         # Initialize the number of images used (in batch size)
@@ -239,6 +263,8 @@ class DCGAN(object):
         Train DCGAN
         """
 
+        # TODO: Why is laoding mnist data again since it has been done by process_input? Also, 'data' is not used
+        # TODO: It seems that MNIST uses data_X and other dataset uses self.data_X
         if config.dataset == 'mnist':
             data_X, data_y = self.load_mnist()
         else:
@@ -248,7 +274,7 @@ class DCGAN(object):
         # -----------------------------------------------------------------
         # Training Discriminator!
         # Use AdamOptimizer
-        # TODO: Is the [0] indicate we just consider one parameter or weight?
+        # TODO: Is the index tf.gradients()[0] indicate we just consider one parameter or weight?
         # TODO: Why is using so many instance attributes (e.g. self.d_grads, self.d_vars)?
         d_optim = tf.train.AdamOptimizer(config.learning_rate_d, beta1=config.beta1) \
             .minimize(self.d_loss, var_list=self.d_vars)
@@ -258,16 +284,19 @@ class DCGAN(object):
         self.d_grads_sum = tf.histogram_summary("d_grad_sum", self.d_grads)
 
         # -----------------------------------------------------------------
-        # Training Generator!
+        # Training Generator: Get g_optim[_heuristic, _llr]!
         # if-else will determine whether using vanilla GAN or -logD trick or reverse KL
         if self.flags.g_heruistic == 0:
             g_optim = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
                 .minimize(self.g_loss, var_list=self.g_vars)
+
+            # Use a g_loss_sum to summarize three cases [self.g_loss, self.g_loss_heuristic, g_loss_llr]
+            # TODO: Why is treating g_loss and g_grads differently
             self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
             self.g_grads = tf.gradients(self.g_loss, self.g_vars)[0]
 
         elif self.flags.g_heruistic == 1:
-            g_optim_heruistic = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
+            g_optim_heuristic = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
                 .minimize(self.g_loss_heruistic, var_list=self.g_vars)
             self.g_grads = tf.gradients(self.g_loss_heruistic, self.g_vars)[0]
             self.g_loss_sum = scalar_summary("g_loss_heruistic", self.g_loss_heruistic)
@@ -281,6 +310,7 @@ class DCGAN(object):
 
         self.g_grads_sum = tf.histogram_summary("g_grad_sum", self.g_grads)
 
+        # Initialize all variables before session runs.
         # Consider TF version compatibility using exception
         try:
             tf.initialize_all_variables().run()
@@ -301,7 +331,7 @@ class DCGAN(object):
         # Input sample noise z is uniform [-1,1] with a batch_size=sample_size
         sample_z = np.random.uniform(-1, 1, size=(self.sample_size, self.z_dim))
 
-        # Get the first batch of sample images and labels (only exists when dealing with mnist)
+        # TODO: Why is just fetching the first sample batch of images (or labels when dealing with mnist)
         if config.dataset == 'mnist':
             sample_images = data_X[0:self.sample_size]
             sample_labels = data_y[0:self.sample_size]
@@ -353,9 +383,10 @@ class DCGAN(object):
                     batch_images = self.data_X[idx * config.batch_size:(idx + 1) * config.batch_size]
 
                 # save mean of all images used for training
+                # TODO: But this instance attribute is not used
                 self.cum_image = self.cum_image + np.mean(batch_images, axis=0, keepdims=True)
 
-                # Increase num_images_used per batch
+                # Increase num_images_used by 1 per batch
                 self.num_images_used += 1
 
                 # Input a nose z in one batch size with uniform [-1,1] or [0,1] distribution
@@ -388,7 +419,7 @@ class DCGAN(object):
                     if config.g_heruistic == 1:
                         for _ in range(self.flags.g_update):
                             # Update G network
-                            _, summary_str = self.sess.run([g_optim_heruistic, self.g_sum],
+                            _, summary_str = self.sess.run([g_optim_heuristic, self.g_sum],
                                                            feed_dict={self.z: batch_z, self.y: batch_labels})
                             self.writer.add_summary(summary_str, counter)
 
@@ -426,7 +457,7 @@ class DCGAN(object):
                         for _ in range(self.flags.g_update):
                             # Update G network
                             _, summary_str = self.sess.run(
-                                [g_optim_heruistic, self.g_sum], feed_dict={self.z: batch_z}
+                                [g_optim_heuristic, self.g_sum], feed_dict={self.z: batch_z}
                             )
                             self.writer.add_summary(summary_str, counter)
 
@@ -444,7 +475,7 @@ class DCGAN(object):
                             _, summary_str = self.sess.run([g_optim_llr, self.g_sum], feed_dict={self.z: batch_z})
                             self.writer.add_summary(summary_str, counter)
 
-                # Print loss etc
+                # Print loss etc Every batch!
                 if self.y_dim:
                     # Print d_fake, samples, d_loss and g_loss with a batch of sample_z,
                     # sample_images and sample labels. TODO: What is "samples" used for?
@@ -507,7 +538,7 @@ class DCGAN(object):
                                             feed_dict={self.train_avg_noise: avg_noise(batch_images)})
                 self.writer.add_summary(summary_str, counter)
 
-                # Every config.visualize_interval, save images to config.sample_dir path or analyze_gmm
+                # Every config.visualize_interval=5, save images to config.sample_dir path or analyze_gmm
                 if np.mod(counter, config.visualize_interval) == 0:
                     if config.dataset == 'mnist':
                         save_images(samples, [8, 8],
@@ -674,7 +705,7 @@ class DCGAN(object):
 
                 # A network architecture "GMM_XLARGE" (9layer-MLP)
                 if self.flags.network == "GMM_XLARGE":
-                    # Input a batch of images
+                    # Input a batch of images and shape them into a 2D tensor for linear layer
                     image = tf.reshape(image, [-1, self.output_width * self.output_height * self.c_dim])
                     # A linear layer with scope 'd_h[0-7]_lin'
                     h0_, h0_w, h0_b = linear(image, 128, 'd_h0_lin', init_type=init, with_w=True)
@@ -737,13 +768,14 @@ class DCGAN(object):
                     h1, h1_w, h1_b = linear(h0, 1, 'd_h1_lin', init_type=init, with_w=True)
                     layers = [h0, h1]
 
-                # A network architecture "DCGAN" (5layer-CNN)
+                # A network architecture "DCGAN" (5layer-CNN with batch normalization)
                 elif self.flags.network == "DCGAN":
                     # Use leaky relu as a nonlinear activation,
                     # and use batch normalization in each hidden layer
-                    # TODO: 'h0_' is well-defined
+                    # TODO: 'h0_' is not well-defined, h0_ should be a 4D tensor, it is?
                     h0 = lrelu(h0_)
 
+                    # The parameter self.df_dim*N indicates the output dimension of conv2d
                     h1_ = conv2d(h0, self.df_dim * 2, name='d_h1_conv')
                     h1 = lrelu(self.d_bn1(h1_))
 
@@ -772,7 +804,7 @@ class DCGAN(object):
 
             # Case 2: Use labels in input images (e.g. MNIST)
             else:
-                # Try to concatenate tensors image and label along the axis=3 dimension
+                # conv_cond_concat: Try to concatenate tensors image and label along the axis=3 dimension
                 # TODO: Why is the concatenation necessary in h[0-2]?
                 # TODO: A way to incorporate the label information in the input?
                 yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
@@ -796,6 +828,8 @@ class DCGAN(object):
 
                 layers = [h0, h1, h2, h3]
 
+
+                # Use 'd_[real, fake]_sums' to write snapshot value of each layer output into tf.histogram_summary
                 if not reuse:
                     self.d_real_sums = []
                     for layer in layers:
@@ -808,10 +842,26 @@ class DCGAN(object):
                 return tf.nn.sigmoid(layers[-1]), layers[-1]
 
     def generator(self, z, y=None):
+        '''
+        Implement the generator
+        :param z:
+        :param y:
+        :return:
+        '''
+
+        # "init" denotes how to initialize the weights
         init = self.flags.init_type
+        #  variable scope 'generator'
         with tf.variable_scope("generator") as scope:
+
+            # Case 1: Use no labels to output images
             if not self.y_dim:
+
+                # 'GMM_LARGE' network architecture (9layer-MLP)
+                # TODO: Why is there not 'GMM_XLARGE' network architecture?
                 if self.flags.network == "GMM_LARGE":
+
+                    # Input is one batch of noise z
                     h0_, h0_w, h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
 
@@ -820,27 +870,37 @@ class DCGAN(object):
 
                     h2_, h2_w, h2_b = linear(h1, 128, 'g_h2_lin', init_type=init, with_w=True)
                     h2 = self.nl(h2_)
+
                     h3_, h3_w, h3_b = linear(h2, 128, 'g_h3_lin', init_type=init, with_w=True)
                     h3 = self.nl(h3_)
+
                     h4_, h4_w, h4_b = linear(h3, 128, 'g_h4_lin', init_type=init, with_w=True)
                     h4 = self.nl(h4_)
+
                     h5_, h5_w, h5_b = linear(h4, 128, 'g_h5_lin', init_type=init, with_w=True)
                     h5 = self.nl(h5_)
+
                     h6_, h6_w, h6_b = linear(h5, 128, 'g_h6_lin', init_type=init, with_w=True)
                     h6 = self.nl(h6_)
+
                     h7_, h7_w, h7_b = linear(h6, 128, 'g_h7_lin', init_type=init, with_w=True)
                     h7 = self.nl(h7_)
 
+                    # Output dimension is 'batch_size*1*gmm_dim*1'
                     h8, h8_w, h8_b = linear(h7, self.flags.gmm_dim, 'g_h8_lin', init_type=init, with_w=True)
                     h8 = tf.reshape(h8, [-1, self.output_height, self.output_width, self.c_dim])
 
                     layers = [h0, h1, h2, h3, h4, h5, h6, h7, h8]
 
+                    # Use 'g_sums' to write snapshot value of each layer output into tf.histogram_summary
                     self.g_sums = []
                     for layer in layers:
                         self.g_sums.append(tf.histogram_summary("g_sum_" + layer.name, layer))
 
+                    # return one batch of generated images
                     return layers[-1]
+
+                # 'GMM_MEDIUM' network architecture (5layer-MLP)
                 elif self.flags.network == "GMM_MEDIUM":
                     h0_, h0_w, h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
@@ -858,17 +918,22 @@ class DCGAN(object):
                     h4 = tf.reshape(h4, [-1, self.output_height, self.output_width, self.c_dim])
                     layers = [h0, h1, h2, h3, h4]
 
+                    # Use 'g_sums' to write snapshot value of each layer output into tf.histogram_summary
                     self.g_sums = []
                     for layer in layers:
                         self.g_sums.append(tf.histogram_summary("g_sum_" + layer.name, layer))
 
                     return layers[-1]
+
+                # 'GMM_SMALL' network architecture (3layer-MLP)
                 elif self.flags.network == "GMM_SMALL":
                     h0_, h0_w, h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
 
                     h1_, h1_w, h1_b = linear(h0, 128, 'g_h1_lin', init_type=init, with_w=True)
                     h1 = self.nl(h1_)
+
+                    # TODO: Why is self.relu_state commented out? Do we only consider relu_state in GMM_SMALL?
                     # self.relu_state.append(h0_)
                     # self.relu_state.append(h1_)
 
@@ -876,39 +941,45 @@ class DCGAN(object):
                     h2 = tf.reshape(h2, [-1, self.output_height, self.output_width, self.c_dim])
                     layers = [h0, h1, h2]
 
+                    # Use 'g_sums' to write snapshot value of each layer output into tf.histogram_summary
                     self.g_sums = []
                     for layer in layers:
                         self.g_sums.append(tf.histogram_summary("g_sum_" + layer.name, layer))
 
                     return layers[-1]
 
+                # DCGAN use a deconvolutional NN (5layer-DeconvNN with batch normalization)
                 elif self.flags.network == "DCGAN":
                     s = self.output_height
                     s2, s4, s8, s16 = int(s / 2), int(s / 4), int(s / 8), int(s / 16)
 
-                    # project `z` and reshape
+                    # project `z` and reshape, a linear fully-connected layer
                     self.z_, self.h0_w, self.h0_b = linear(z, self.gf_dim * 8 * s16 * s16, 'g_h0_lin', with_w=True)
 
+                    # TODO: We should try to avoid using global variables in functions (e.g. self.h0)
                     self.h0 = tf.reshape(self.z_, [-1, s16, s16, self.gf_dim * 8])
+
+                    # Specify relu activation nd batch normalization here
                     h0 = tf.nn.relu(self.g_bn0(self.h0))
 
-                    self.h1, self.h1_w, self.h1_b = deconv2d(h0,
-                                                             [self.batch_size, s8, s8, self.gf_dim * 4], name='g_h1',
-                                                             with_w=True)
+                    self.h1, self.h1_w, self.h1_b = deconv2d(
+                        h0, [self.batch_size, s8, s8, self.gf_dim * 4], name='g_h1', with_w=True
+                    )
                     h1 = tf.nn.relu(self.g_bn1(self.h1))
 
-                    h2, self.h2_w, self.h2_b = deconv2d(h1,
-                                                        [self.batch_size, s4, s4, self.gf_dim * 2], name='g_h2',
-                                                        with_w=True)
+                    h2, self.h2_w, self.h2_b = deconv2d(
+                        h1, [self.batch_size, s4, s4, self.gf_dim * 2], name='g_h2', with_w=True
+                    )
                     h2 = tf.nn.relu(self.g_bn2(h2))
 
-                    h3, self.h3_w, self.h3_b = deconv2d(h2,
-                                                        [self.batch_size, s2, s2, self.gf_dim * 1], name='g_h3',
-                                                        with_w=True)
+                    h3, self.h3_w, self.h3_b = deconv2d(
+                        h2, [self.batch_size, s2, s2, self.gf_dim * 1], name='g_h3', with_w=True)
+
                     h3 = tf.nn.relu(self.g_bn3(h3))
 
-                    h4, self.h4_w, self.h4_b = deconv2d(h3,
-                                                        [self.batch_size, s, s, self.c_dim], name='g_h4', with_w=True)
+                    h4, self.h4_w, self.h4_b = deconv2d(
+                        h3, [self.batch_size, s, s, self.c_dim], name='g_h4', with_w=True
+                    )
 
                     layers = [h0, h1, h2, h3, h4]
 
@@ -916,29 +987,44 @@ class DCGAN(object):
                     for layer in layers:
                         self.g_sums.append(tf.histogram_summary("g_sum_" + layer.name, layer))
 
+                    # TODO: Why is using 'tanh' in the last layer? To normalize the output?
                     return tf.nn.tanh(h4)
+
+            # Case 2: use input labels such as [0,9] to output MNIST [4layer-DeconvNN with batch norm]
             else:
                 s = self.output_height
                 s2, s4 = int(s / 2), int(s / 4)
 
-                # yb = tf.expand_dims(tf.expand_dims(y, 1),2)
+                # Try to concatenate input noise z and label y or yb along the axis=1 dimension
                 yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
                 z = tf.concat(1, [z, y])
 
+                # project a concatenated 'z' and reshape, a linear fully-connected layer with batch norm and relu
                 h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
                 h0 = tf.concat(1, [h0, y])
 
+                # Still using linear fully-connected with batch norm and relu
                 h1 = tf.nn.relu(self.g_bn1(linear(h0, self.gf_dim * 2 * s4 * s4, 'g_h1_lin')))
                 h1 = tf.reshape(h1, [self.batch_size, s4, s4, self.gf_dim * 2])
-
                 h1 = conv_cond_concat(h1, yb)
 
+                # Deconv layer
                 h2 = tf.nn.relu(self.g_bn2(deconv2d(h1, [self.batch_size, s2, s2, self.gf_dim * 2], name='g_h2')))
                 h2 = conv_cond_concat(h2, yb)
 
+                # Deconv layer
+                # TODO: Why is using sigmoid? To set image point value between [0,1]?
+                # TODO: Why is not using histogram_summary in this case (MNIST)?
                 return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
 
     def sampler(self, z, y=None):
+        '''
+        Implement the sampler which is a generator with input 'sample_z'
+        :param z:
+        :param y:
+        :return:
+        '''
+
         init = self.flags.init_type
         with tf.variable_scope("generator") as scope:
             scope.reuse_variables()
@@ -969,6 +1055,7 @@ class DCGAN(object):
                     h8 = tf.reshape(h8, [-1, self.output_height, self.output_width, self.c_dim])
 
                     return h8
+
                 elif self.flags.network == "GMM_MEDIUM":
                     h0_, h0_w, h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
@@ -987,6 +1074,7 @@ class DCGAN(object):
                     layers = [h0, h1, h2, h3, h4]
 
                     return h4
+
                 elif self.flags.network == "GMM_SMALL":
                     h0_, h0_w, h0_b = linear(z, 128, 'g_h0_lin', init_type=init, with_w=True)
                     h0 = self.nl(h0_)
@@ -1009,6 +1097,7 @@ class DCGAN(object):
                                     [-1, s16, s16, self.gf_dim * 8])
                     h0 = tf.nn.relu(self.g_bn0(h0, train=False))
 
+                    # TODO: Why is still using 'self.batch_size' instead of 'self.sample_size'?
                     h1 = deconv2d(h0, [self.batch_size, s8, s8, self.gf_dim * 4], name='g_h1')
                     h1 = tf.nn.relu(self.g_bn1(h1, train=False))
 
@@ -1020,7 +1109,8 @@ class DCGAN(object):
 
                     h4 = deconv2d(h3, [self.batch_size, s, s, self.c_dim], name='g_h4')
 
-                return tf.nn.tanh(h4)
+                    return tf.nn.tanh(h4)
+
             else:
                 s = self.output_height
                 s2, s4 = int(s / 2), int(s / 4)
@@ -1043,15 +1133,24 @@ class DCGAN(object):
                 return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
 
     def load_mnist(self):
+        '''
+        Loading MNIST dataset with normalization and shuffling (self.data_X, self.data_y)
+        :return:
+        '''
+
+        # data_dir = './data/mnist'
         data_dir = os.path.join("./data", self.dataset_name)
 
+        # Open file and return a stream
         fd = open(os.path.join(data_dir, 'train-images-idx3-ubyte'))
+        # Construct an array from data in a text or binary file
         loaded = np.fromfile(file=fd, dtype=np.uint8)
+        # TODO: Why is starting from the index 16 or 8
         trX = loaded[16:].reshape((60000, 28, 28, 1)).astype(np.float)
 
         fd = open(os.path.join(data_dir, 'train-labels-idx1-ubyte'))
         loaded = np.fromfile(file=fd, dtype=np.uint8)
-        trY = loaded[8:].reshape((60000)).astype(np.float)
+        trY = loaded[8:].reshape((60000,)).astype(np.float)
 
         fd = open(os.path.join(data_dir, 't10k-images-idx3-ubyte'))
         loaded = np.fromfile(file=fd, dtype=np.uint8)
@@ -1059,20 +1158,25 @@ class DCGAN(object):
 
         fd = open(os.path.join(data_dir, 't10k-labels-idx1-ubyte'))
         loaded = np.fromfile(file=fd, dtype=np.uint8)
-        teY = loaded[8:].reshape((10000)).astype(np.float)
+        teY = loaded[8:].reshape((10000,)).astype(np.float)
 
         trY = np.asarray(trY)
         teY = np.asarray(teY)
 
+        # Concatenate training data and test data
         X = np.concatenate((trX, teX), axis=0)
         y = np.concatenate((trY, teY), axis=0)
 
+        # Randomly shuffle the X and y.
+        # Note that X and y should use the same seed, otherwise the labels will be wrong
         seed = 547
+        # Seed the generator before using a randomState method
         np.random.seed(seed)
         np.random.shuffle(X)
         np.random.seed(seed)
         np.random.shuffle(y)
 
+        # From int (or np.unit8) to one-hot label, and normalize the mnist data [0,1]
         y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
         for i, label in enumerate(y):
             y_vec[i, y[i]] = 1.0
@@ -1080,6 +1184,14 @@ class DCGAN(object):
         return X / 255., y_vec
 
     def save(self, checkpoint_dir, step):
+        '''
+        Save all variables into checkpoint file w.r.t. dataset_name, batch_size and output_height
+        :param checkpoint_dir:
+        :param step:
+        :return:
+        '''
+
+        # TODO: Why is using a model_name here?
         model_name = "DCGAN.model"
         model_dir = "%s_%s_%s" % (self.dataset_name, self.batch_size, self.output_height)
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
@@ -1092,6 +1204,12 @@ class DCGAN(object):
                         global_step=step)
 
     def load(self, checkpoint_dir):
+        '''
+        Load all variables from checkpoint file
+        :param checkpoint_dir:
+        :return:
+        '''
+
         print(" [*] Reading checkpoints...")
 
         model_dir = "%s_%s_%s" % (self.dataset_name, self.batch_size, self.output_height)
@@ -1100,6 +1218,7 @@ class DCGAN(object):
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            # TODO: Why not use 'saver.restore(self.sess, ckpt.model_checkpoint_path)' directly?
             self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
             print(" [*] Success to read {}".format(ckpt_name))
             return True
