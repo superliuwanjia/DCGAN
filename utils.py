@@ -276,7 +276,7 @@ def generate_gmm_data_random_orthant(num_data=50000, dim=2, num_cluster=None, sc
         cluster_mean = scale * t
         means.append(cluster_mean)
 
-    print "Cluster means: ", means
+    print("Cluster means: ", means)
     std = np.array([var] * num_cluster).transpose()
     weights = np.array([1./num_cluster] * num_cluster).transpose()
 
@@ -292,29 +292,42 @@ def generate_gmm_data_random_orthant(num_data=50000, dim=2, num_cluster=None, sc
 
 
 def generate_gmm_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
-    
+
+    # The number of clusters will be less than 2^(dim-1)
     if num_cluster == None:
         num_cluster = np.power(2, dim-1)
     assert num_cluster <= np.power(2, dim-1)
     
-    num_clusters =range(num_cluster)
+    num_clusters = range(num_cluster)
     #random.shuffle(num_clusters)
 
     means = []
     for cluster in num_clusters:
+        # Return a list of strs - A regular binary representation of integer 'cluster',
+        # for example, 0 -> ['0']
         s = list(bin(cluster)[2:].zfill(dim-1))
+
+        # Return an array of signs - Change 0's to -1's in s, for example, 0 -> t=[-1]
         t = np.sign([int(c)-0.5 for c in s])
         # print s
         # print t
+
+        # Return an array, for example, 0 -> cluster_mean=[2, -2]
         cluster_mean =  np.hstack((np.array([scale]), scale * t))
         means.append(cluster_mean)
 
+    # For example, dim=2: means=[[2, -2],[2, 2]]
     means = np.concatenate(means, axis=0)
     means = means.reshape([num_cluster, dim])
-    print "Cluster means: ", means
+
+    print("Cluster means: ", means)
+    # An arrary that stores variances with a length num_cluster
     std = np.array([var] * num_cluster).transpose()
+
+    # weights denotes the prior probability that any point comes from each cluster
     weights = np.array([1./num_cluster] * num_cluster).transpose()
 
+    # Generate GMM data!
     data = np.zeros([num_data, dim], dtype=np.float32)
     clusters = np.zeros([num_data, ], dtype=np.float32)
     for i in range(data.shape[0]):
@@ -323,6 +336,8 @@ def generate_gmm_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02
                                                cov=np.identity(dim) * std[cluster])
         data[i] = sample.transpose()
         clusters[i] = cluster
+
+    # clip the data into the range [-6, 6]
     return np.clip(data, -3 * scale, 3 * scale), clusters, means
 
 def generate_gmm_grid_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
@@ -359,7 +374,6 @@ def generate_gmm_grid_data(num_data=50000, dim=2, num_cluster=None, scale=2, var
         data[i] = sample.transpose()
         clusters[i] = cluster
     return np.clip(data, -3 * scale, 3 * scale), clusters, means
-
 
 def generate_gmm_dense_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
     np.random.seed(0) 
@@ -431,7 +445,7 @@ def estimate_optimal_cluster_size_gmm(data, clusters=range(1,10), run=10):
     # print out
     i = np.argmax(out)
     print out
-    return clusters[i], predict[i],gmms[i]
+    return clusters[i], predict[i], gmms[i]
 
 
 def estimate_optimal_cluster_size_jump(data, clusters=range(1,10), run=5):
