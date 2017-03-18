@@ -1,5 +1,5 @@
 import math
-import numpy as np 
+import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.framework import ops
@@ -19,16 +19,17 @@ except:
     merge_summary = tf.summary.merge
     SummaryWriter = tf.summary.FileWriter
 
+
 class batch_norm(object):
-    def __init__(self, epsilon=1e-5, momentum = 0.9, name="batch_norm"):
+    def __init__(self, epsilon=1e-5, momentum=0.9, name="batch_norm"):
         with tf.variable_scope(name):
-            self.epsilon  = epsilon
+            self.epsilon = epsilon
             self.momentum = momentum
             self.name = name
 
     def __call__(self, x, train=True):
         return tf.contrib.layers.batch_norm(x,
-                                            decay=self.momentum, 
+                                            decay=self.momentum,
                                             updates_collections=None,
                                             epsilon=self.epsilon,
                                             scale=True,
@@ -53,7 +54,8 @@ def binary_cross_entropy(preds, targets, name=None):
         preds = ops.convert_to_tensor(preds, name="preds")
         targets = ops.convert_to_tensor(targets, name="targets")
         return tf.reduce_mean(-(targets * tf.log(preds + eps) +
-                              (1. - targets) * tf.log(1. - preds + eps)))
+                                (1. - targets) * tf.log(1. - preds + eps)))
+
 
 def conv_cond_concat(x, y):
     """
@@ -61,11 +63,11 @@ def conv_cond_concat(x, y):
     """
     x_shapes = x.get_shape()
     y_shapes = y.get_shape()
-    return tf.concat(3, [x, y*tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])])
+    return tf.concat(3, [x, y * tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])])
 
 
 # Note that the parameters of conv2d() and deconv2d() are different
-def conv2d(input_, output_dim, 
+def conv2d(input_, output_dim,
            k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
            name="conv2d"):
     with tf.variable_scope(name):
@@ -78,6 +80,7 @@ def conv2d(input_, output_dim,
 
         return conv
 
+
 def deconv2d(input_, output_shape,
              k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
              name="deconv2d", with_w=False):
@@ -85,15 +88,15 @@ def deconv2d(input_, output_shape,
         # filter : [height, width, output_channels, in_channels]
         w = tf.get_variable('w', [k_h, k_w, output_shape[-1], input_.get_shape()[-1]],
                             initializer=tf.random_normal_initializer(stddev=stddev))
-        
+
         try:
             deconv = tf.nn.conv2d_transpose(input_, w, output_shape=output_shape,
-                                strides=[1, d_h, d_w, 1])
+                                            strides=[1, d_h, d_w, 1])
 
         # Support for verisons of TensorFlow before 0.7.0
         except AttributeError:
             deconv = tf.nn.deconv2d(input_, w, output_shape=output_shape,
-                                strides=[1, d_h, d_w, 1])
+                                    strides=[1, d_h, d_w, 1])
 
         biases = tf.get_variable('biases', [output_shape[-1]], initializer=tf.constant_initializer(0.0))
         deconv = tf.reshape(tf.nn.bias_add(deconv, biases), deconv.get_shape())
@@ -102,20 +105,22 @@ def deconv2d(input_, output_shape,
             return deconv, w, biases
         else:
             return deconv
-       
+
 
 def tf_accuracy(t, val, batch_size):
-    if val >0.5:
+    if val > 0.5:
         elements = tf.greater(t, 0.5)
     else:
         elements = tf.less(t, 0.5)
 
     as_ints = tf.cast(elements, tf.float32)
     count = tf.reduce_sum(as_ints)
-    return count/batch_size
+    return count / batch_size
+
 
 def lrelu(x, leak=0.0, name="lrelu"):
-    return tf.maximum(x, leak*x)
+    return tf.maximum(x, leak * x)
+
 
 def linear(input_, output_size, scope=None, init_type="xavier", stddev=0.02, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
@@ -123,33 +128,36 @@ def linear(input_, output_size, scope=None, init_type="xavier", stddev=0.02, bia
     with tf.variable_scope(scope or "Linear"):
         if init_type == "normal":
             matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-                                 tf.random_normal_initializer(stddev=stddev))
+                                     tf.random_normal_initializer(stddev=stddev))
         elif init_type == "orthogonal":
             matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-                                 tf.orthogonal_initializer(gain=1.4))
+                                     orthogonal_initializer(scale=1.4))
         elif init_type == "xavier":
             matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
-                                 tf.contrib.layers.xavier_initializer())
- 
+                                     tf.contrib.layers.xavier_initializer())
+
         bias = tf.get_variable("bias", [output_size],
-            initializer=tf.constant_initializer(bias_start))
+                               initializer=tf.constant_initializer(bias_start))
+
         if with_w:
             return tf.matmul(input_, matrix) + bias, matrix, bias
         else:
             return tf.matmul(input_, matrix) + bias
 
 
-def orthogonal_initializer(scale = 1.1):
+def orthogonal_initializer(scale=1.1):
     ''' From Lasagne and Keras. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
     '''
     print('Warning -- You have opted to use the orthogonal_initializer function')
-    def _initializer(shape, dtype=tf.float32):
+
+    def _initializer(shape, dtype=tf.float32, partition_info=None):
         flat_shape = (shape[0], np.prod(shape[1:]))
         a = np.random.normal(0.0, 1.0, flat_shape)
         u, _, v = np.linalg.svd(a, full_matrices=False)
         # pick the one with the correct shape
         q = u if u.shape == flat_shape else v
-        q = q.reshape(shape) #this needs to be corrected to float32
+        q = q.reshape(shape)  # this needs to be corrected to float32
         print('you have initialized one orthogonal matrix.')
         return tf.constant(scale * q[:shape[0], :shape[1]], dtype=tf.float32)
+
     return _initializer
