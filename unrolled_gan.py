@@ -18,6 +18,7 @@ except:
     print("Warning: moviepy not found.")
     generate_movie = False
 
+
 def extract_update_dict(update_ops):
     """Extract variables and their new values from Assign and AssignAdd ops.
     
@@ -38,21 +39,25 @@ def extract_update_dict(update_ops):
         elif update.op.type == 'AssignAdd':
             updates[var.value()] = var + value
         else:
-            raise ValueError("Update op type (%s) must be of type Assign or AssignAdd"%update_op.op.type)
+            raise ValueError("Update op type (%s) must be of type Assign or AssignAdd" % update.op.type)
     return updates
+
+
 def sample_mog(batch_size, n_mixture=8, std=0.01, radius=1.0):
     thetas = np.linspace(0, 2 * np.pi, n_mixture)
     xs, ys = radius * np.sin(thetas), radius * np.cos(thetas)
     cat = ds.Categorical(tf.zeros(n_mixture))
     comps = [ds.MultivariateNormalDiag([xi, yi], [std, std]) for xi, yi in zip(xs.ravel(), ys.ravel())]
     data = ds.Mixture(cat, comps)
-    return data.sample_n(batch_size)
+    return data.sample(batch_size)
+
 
 def generator(z, output_dim=2, n_hidden=128, n_layer=2):
     with tf.variable_scope("generator"):
         h = slim.stack(z, slim.fully_connected, [n_hidden] * n_layer, activation_fn=tf.nn.tanh)
         x = slim.fully_connected(h, output_dim, activation_fn=None)
     return x
+
 
 def discriminator(x, n_hidden=128, n_layer=2, reuse=False):
     with tf.variable_scope("discriminator", reuse=reuse):
@@ -70,14 +75,15 @@ params = dict(
     viz_every=1000,
     z_dim=256,
     x_dim=2,
-    unrolling_steps=5,
+    unrolling_steps=2,
 )
 tf.reset_default_graph()
 
 data = sample_mog(params['batch_size'])
 
 noise = ds.Normal(tf.zeros(params['z_dim']), 
-                  tf.ones(params['z_dim'])).sample_n(params['batch_size'])
+                  tf.ones(params['z_dim'])).sample(params['batch_size'])
+
 # Construct generator and discriminator nets
 with slim.arg_scope([slim.fully_connected], weights_initializer=tf.orthogonal_initializer(gain=1.4)):
     samples = generator(noise, output_dim=params['x_dim'])
@@ -86,8 +92,8 @@ with slim.arg_scope([slim.fully_connected], weights_initializer=tf.orthogonal_in
     
 # Saddle objective    
 loss = tf.reduce_mean(
-    tf.nn.sigmoid_cross_entropy_with_logits(real_score, tf.ones_like(real_score)) +
-    tf.nn.sigmoid_cross_entropy_with_logits(fake_score, tf.zeros_like(fake_score)))
+    tf.nn.sigmoid_cross_entropy_with_logits(logits=real_score, labels=tf.ones_like(real_score)) +
+    tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_score, labels=tf.zeros_like(fake_score)))
 
 gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "generator")
 disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "discriminator")
@@ -124,6 +130,9 @@ frames = []
 np_samples = []
 n_batches_viz = 10
 viz_every = params['viz_every']
+if not os.path.exists('unrolled_gan_samples/'):
+    os.mkdir('unrolled_gan_samples/')
+
 for i in tqdm(xrange(params['max_iter'])):
     f, _, _ = sess.run([[loss, unrolled_loss], g_train_op, d_train_op])
     fs.append(f)

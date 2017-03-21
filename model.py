@@ -88,6 +88,8 @@ class DCGAN(object):
             self.nl = lrelu
         elif self.flags.activation == "tanh":
             self.nl = tf.nn.tanh
+        elif self.flags.activation == "lin":
+            self.nl = lin
 
     def process_input(self):
         '''
@@ -244,11 +246,12 @@ class DCGAN(object):
         self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
 
-        # Calculate the loss for generator in vanilla GAN, -logD trick and reverse KL
+        # Calculate the loss for generator in vanilla GAN, -logD trick and reverse KL, maximum likelihood
         self.g_loss = -self.d_loss
-        self.g_loss_heruistic = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        self.g_loss_heuristic = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
             self.D_logits_, tf.ones_like(self.D_)))
         self.g_loss_llr = -tf.reduce_mean(tf.log(self.D_ / (1 - self.D_)))
+        self.g_loss_ml = -tf.reduce_mean(tf.exp(tf.log(self.D_) / tf.log(1 - self.D_)))
 
         # Put variables w.r.t. discriminator and generator in two different lists so as to do gradients easily
         t_vars = tf.trainable_variables()
@@ -284,29 +287,37 @@ class DCGAN(object):
         self.d_grads_sum = tf.histogram_summary("d_grad_sum", self.d_grads)
 
         # -----------------------------------------------------------------
-        # Training Generator: Get g_optim[_heuristic, _llr]!
-        # if-else will determine whether using vanilla GAN or -logD trick or reverse KL
-        if self.flags.g_heruistic == 0:
+        # Training Generator! [self.g_loss, self.g_loss_heuristic, g_loss_llr, g_loss_ml]
+        # The vanilla GAN
+        if self.flags.g_heuristic == 0:
             g_optim = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
                 .minimize(self.g_loss, var_list=self.g_vars)
 
-            # Use a g_loss_sum to summarize three cases [self.g_loss, self.g_loss_heuristic, g_loss_llr]
+            # Use a g_loss_sum to summarize three cases
             # TODO: Why is treating g_loss and g_grads differently
             self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
             self.g_grads = tf.gradients(self.g_loss, self.g_vars)[0]
 
-        elif self.flags.g_heruistic == 1:
+        # The -logD trick
+        elif self.flags.g_heuristic == 1:
             g_optim_heuristic = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
-                .minimize(self.g_loss_heruistic, var_list=self.g_vars)
-            self.g_grads = tf.gradients(self.g_loss_heruistic, self.g_vars)[0]
-            self.g_loss_sum = scalar_summary("g_loss_heruistic", self.g_loss_heruistic)
+                .minimize(self.g_loss_heuristic, var_list=self.g_vars)
+            self.g_grads = tf.gradients(self.g_loss_heuristic, self.g_vars)[0]
+            self.g_loss_sum = scalar_summary("g_loss_heuristic", self.g_loss_heuristic)
 
-        # self.flags.g_heruistic is not 1 or 0, which indicates the reverse KL case
-        else:
+        # The reverse KL case
+        elif self.flags.g_heuristic == 2:
             g_optim_llr = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
                 .minimize(self.g_loss_llr, var_list=self.g_vars)
             self.g_grads = tf.gradients(self.g_loss_llr, self.g_vars)[0]
             self.g_loss_sum = scalar_summary("g_loss_llr", self.g_loss_llr)
+
+        # The maximum likelihood case (from Ian Goodfellow)
+        else:
+            g_optim_ml = tf.train.AdamOptimizer(config.learning_rate_g, beta1=config.beta1) \
+                .minimize(self.g_loss_ml, var_list=self.g_vars)
+            self.g_grads = tf.gradients(self.g_loss_ml, self.g_vars)[0]
+            self.g_loss_sum = scalar_summary("g_loss_ml", self.g_loss_ml)
 
         self.g_grads_sum = tf.histogram_summary("g_grad_sum", self.g_grads)
 
@@ -321,6 +332,7 @@ class DCGAN(object):
         # Merge generator and discriminator summaries separately
         self.g_sum = merge_summary([self.z_sum, self.d__sum, self.G_sum, self.d_loss_fake_sum,
                                     self.g_loss_sum, self.g_sums, self.g_grads_sum])
+        # TODO: There are two self.d_sum?
         self.d_sum = merge_summary([self.real_accu_sum, self.fake_accu_sum, self.z_sum, self.d_sum,
                                     self.d_loss_real_sum, self.d_loss_sum, self.d_real_sums,
                                     self.d_fake_sums, self.d_grads_sum])
@@ -329,7 +341,9 @@ class DCGAN(object):
         self.writer = SummaryWriter("./" + self.flags.log_dir, self.sess.graph)
 
         # Input sample noise z is uniform [-1,1] with a batch_size=sample_size
-        sample_z = np.random.uniform(-1, 1, size=(self.sample_size, self.z_dim))
+        # sample_z = np.random.uniform(-1, 1, size=(self.sample_size, self.z_dim))
+        # sample_z = np.random.uniform(-1, 1, [config.sample_size, self.z_dim]).astype(np.float32)
+        sample_z = np.random.normal(0, 1, [self.sample_size, self.z_dim]).astype(np.float32)
 
         # TODO: Why is just fetching the first sample batch of images (or labels when dealing with mnist)
         if config.dataset == 'mnist':
@@ -384,7 +398,7 @@ class DCGAN(object):
 
                 # save mean of all images used for training
                 # TODO: But this instance attribute is not used
-                self.cum_image = self.cum_image + np.mean(batch_images, axis=0, keepdims=True)
+                self.cum_image += np.mean(batch_images, axis=0, keepdims=True)
 
                 # Increase num_images_used by 1 per batch
                 self.num_images_used += 1
@@ -416,14 +430,7 @@ class DCGAN(object):
                     )
                     self.writer.add_summary(summary_str, counter)
 
-                    if config.g_heruistic == 1:
-                        for _ in range(self.flags.g_update):
-                            # Update G network
-                            _, summary_str = self.sess.run([g_optim_heuristic, self.g_sum],
-                                                           feed_dict={self.z: batch_z, self.y: batch_labels})
-                            self.writer.add_summary(summary_str, counter)
-
-                    elif config.g_heruistic == 0:
+                    if config.g_heuristic == 0:
                         for _ in range(self.flags.g_update):
                             # Update G network
                             _, summary_str = self.sess.run(
@@ -431,10 +438,25 @@ class DCGAN(object):
                                 {self.z: batch_z, self.y: batch_labels, self.images: batch_images}
                             )
                             self.writer.add_summary(summary_str, counter)
-                    else:
+
+                    elif config.g_heuristic == 1:
+                        for _ in range(self.flags.g_update):
+                            # Update G network
+                            _, summary_str = self.sess.run([g_optim_heuristic, self.g_sum],
+                                                           feed_dict={self.z: batch_z, self.y: batch_labels})
+                            self.writer.add_summary(summary_str, counter)
+
+                    elif config.g_heuristic == 2:
                         for _ in range(self.flags.g_update):
                             # Update G network
                             _, summary_str = self.sess.run([g_optim_llr, self.g_sum],
+                                                           feed_dict={self.z: batch_z, self.y: batch_labels})
+                            self.writer.add_summary(summary_str, counter)
+
+                    else:
+                        for _ in range(self.flags.g_update):
+                            # Update G network
+                            _, summary_str = self.sess.run([g_optim_ml, self.g_sum],
                                                            feed_dict={self.z: batch_z, self.y: batch_labels})
                             self.writer.add_summary(summary_str, counter)
 
@@ -453,15 +475,7 @@ class DCGAN(object):
                     )
                     self.writer.add_summary(summary_str, counter)
 
-                    if config.g_heruistic == 1:
-                        for _ in range(self.flags.g_update):
-                            # Update G network
-                            _, summary_str = self.sess.run(
-                                [g_optim_heuristic, self.g_sum], feed_dict={self.z: batch_z}
-                            )
-                            self.writer.add_summary(summary_str, counter)
-
-                    elif config.g_heruistic == 0:
+                    if config.g_heuristic == 0:
                         for _ in range(self.flags.g_update):
                             # Update G network
                             _, summary_str = self.sess.run(
@@ -469,74 +483,96 @@ class DCGAN(object):
                             )
                             self.writer.add_summary(summary_str, counter)
 
-                    else:
+                    elif config.g_heuristic == 1:
+                        for _ in range(self.flags.g_update):
+                            # Update G network
+                            _, summary_str = self.sess.run(
+                                [g_optim_heuristic, self.g_sum], feed_dict={self.z: batch_z}
+                            )
+                            self.writer.add_summary(summary_str, counter)
+
+                    elif config.g_heuristic == 2:
                         for _ in range(self.flags.g_update):
                             # Update G network
                             _, summary_str = self.sess.run([g_optim_llr, self.g_sum], feed_dict={self.z: batch_z})
                             self.writer.add_summary(summary_str, counter)
 
-                # Print loss etc Every batch!
-                if self.y_dim:
-                    # Print d_fake, samples, d_loss and g_loss with a batch of sample_z,
-                    # sample_images and sample labels. TODO: What is "samples" used for?
-                    # TODO: It seems that d_fake, d_loss and g_loss are not used.
-                    d_fake, samples, d_loss, g_loss = self.sess.run(
-                        [self.D_, self.sampler, self.d_loss, self.g_loss],
-                        feed_dict={self.z: sample_z, self.images: sample_images, self.y: sample_labels}
-                    )
-                    # Print d_loss with fake and real images, and g_loss with vanilla, -logD and reverse KL
-                    errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y: batch_labels})
-                    errD_real = self.d_loss_real.eval({self.images: batch_images, self.y: batch_labels})
-                    errG = self.g_loss.eval({self.z: batch_z, self.y: batch_labels, self.images: batch_images})
-                    errG_heruistic = self.g_loss_heruistic.eval({self.z: batch_z, self.y: batch_labels})
-                    errG_llr = self.g_loss_llr.eval({self.z: batch_z, self.y: batch_labels})
+                    else:
+                        for _ in range(self.flags.g_update):
+                            # Update G network
+                            _, summary_str = self.sess.run([g_optim_ml, self.g_sum], feed_dict={self.z: batch_z})
+                            self.writer.add_summary(summary_str, counter)
 
-                else:
-                    # Print d_fake, samples, d_loss and g_loss with a batch of sample_z,
-                    # sample_images and sample labels.
-                    # TODO: Is self.relu_state an empty list all the time?
-                    result = list(self.sess.run(
-                        [self.D_, self.sampler, self.d_loss, self.g_loss, self.g_loss_heruistic,
-                         self.g_loss_llr] + self.relu_state,
-                        feed_dict={self.z: sample_z, self.images: sample_images}
-                    ))
-                    d_fake = result[0]
-                    samples = result[1]
-                    d_loss = result[2]
-                    g_loss = result[3]
-                    g_loss_heruistic = result[4]
-                    g_loss_llr = result[5]
-                    relu_state = result[6:]
+                # Print loss etc Every 10 batch!
+                if np.mod(counter, 10) == 0:
+                    if self.y_dim:
+                        # Print d_fake, samples, d_loss and g_loss with a batch of sample_z,
+                        # sample_images and sample labels. TODO: What is "samples" used for?
+                        # TODO: It seems that d_fake, d_loss and g_loss are not used.
+                        d_fake, samples, d_loss, g_loss = self.sess.run(
+                            [self.D_, self.sampler, self.d_loss, self.g_loss],
+                            feed_dict={self.z: sample_z, self.images: sample_images, self.y: sample_labels}
+                        )
+                        # Print d_loss with fake and real images, and g_loss with vanilla, -logD and reverse KL
+                        errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y: batch_labels})
+                        errD_real = self.d_loss_real.eval({self.images: batch_images, self.y: batch_labels})
+                        errG = self.g_loss.eval({self.z: batch_z, self.y: batch_labels, self.images: batch_images})
+                        errG_heuristic = self.g_loss_heuristic.eval({self.z: batch_z, self.y: batch_labels})
+                        errG_llr = self.g_loss_llr.eval({self.z: batch_z, self.y: batch_labels})
+                        errG_ml = self.g_loss_ml.eval({self.z: batch_z, self.y: batch_labels})
 
-                    # Print d_loss with fake and real images, and g_loss with vanilla, -logD and reverse KL
-                    errD_fake = self.d_loss_fake.eval({self.z: batch_z})
-                    errD_real = self.d_loss_real.eval({self.images: batch_images})
-                    errG = self.g_loss.eval({self.z: batch_z, self.images: batch_images})
-                    errG_heruistic = self.g_loss_heruistic.eval({self.z: batch_z})
-                    errG_llr = self.g_loss_llr.eval({self.z: batch_z})
+                    else:
+                        # Print d_fake, samples, d_loss and g_loss with a batch of sample_z,
+                        # sample_images and sample labels.
+                        # TODO: Is self.relu_state an empty list all the time?
+                        result = list(self.sess.run(
+                            [self.D_, self.sampler, self.d_loss, self.g_loss, self.g_loss_heuristic,
+                             self.g_loss_llr, self.g_loss_ml] + self.relu_state,
+                            feed_dict={self.z: sample_z, self.images: sample_images}
+                        ))
+                        d_fake = result[0]
+                        samples = result[1]
+                        d_loss = result[2]
+                        g_loss = result[3]
+                        g_loss_heuristic = result[4]
+                        g_loss_llr = result[5]
+                        g_loss_ml = result[6]
+                        relu_state = result[7:]
 
-                if config.g_heruistic == 0:
-                    print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
-                          % (epoch, idx, batch_idxs,
-                             time.time() - start_time, errD_fake + errD_real, errG))
-                elif config.g_heruistic == 1:
-                    print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss_heu: %.8f"
-                          % (epoch, idx, batch_idxs,
-                             time.time() - start_time, errD_fake + errD_real, errG_heruistic))
-                else:
-                    print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss_llr: %.8f"
-                          % (epoch, idx, batch_idxs,
-                             time.time() - start_time, errD_fake + errD_real, errG_llr))
+                        # Print d_loss with fake and real images, and g_loss with vanilla, -logD and reverse KL
+                        errD_fake = self.d_loss_fake.eval({self.z: batch_z})
+                        errD_real = self.d_loss_real.eval({self.images: batch_images})
+                        errG = self.g_loss.eval({self.z: batch_z, self.images: batch_images})
+                        errG_heuristic = self.g_loss_heuristic.eval({self.z: batch_z})
+                        errG_llr = self.g_loss_llr.eval({self.z: batch_z})
+                        errG_ml = self.g_loss_ml.eval({self.z: batch_z})
 
-                # Write the average noise from (random) samples into event file
-                summary_str = self.sess.run(self.avg_noise_sum,
+                    if config.g_heuristic == 0:
+                        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f"
+                            % (epoch, idx, batch_idxs,
+                                time.time() - start_time, errD_fake + errD_real, errG))
+                    elif config.g_heuristic == 1:
+                        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss_heu: %.8f"
+                            % (epoch, idx, batch_idxs,
+                                time.time() - start_time, errD_fake + errD_real, errG_heuristic))
+                    elif config.g_heuristic == 2:
+                        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss_llr: %.8f"
+                            % (epoch, idx, batch_idxs,
+                                time.time() - start_time, errD_fake + errD_real, errG_llr))
+                    else:
+                        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss_ml: %.8f"
+                            % (epoch, idx, batch_idxs,
+                                time.time() - start_time, errD_fake + errD_real, errG_ml))
+
+                    # Write the average noise from (random) samples into event file
+                    summary_str = self.sess.run(self.avg_noise_sum,
                                             feed_dict={self.avg_noise: avg_noise(samples)})
-                self.writer.add_summary(summary_str, counter)
+                    self.writer.add_summary(summary_str, counter)
 
-                # Write the average noise from training images into event file as well
-                summary_str = self.sess.run(self.train_avg_noise_sum,
+                    # Write the average noise from training images into event file as well
+                    summary_str = self.sess.run(self.train_avg_noise_sum,
                                             feed_dict={self.train_avg_noise: avg_noise(batch_images)})
-                self.writer.add_summary(summary_str, counter)
+                    self.writer.add_summary(summary_str, counter)
 
                 # Every config.visualize_interval=5, save images to config.sample_dir path or analyze_gmm
                 if np.mod(counter, config.visualize_interval) == 0:
@@ -549,10 +585,10 @@ class DCGAN(object):
                     else:
                         save_images(samples, [8, 8],
                                     './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-                        # if config.g_heruistic == 0:
+                        # if config.g_heuristic == 0:
                         #    print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
-                        # elif config.g_heruistic == 1:
-                        #    print("[Sample] d_loss: %.8f, g_loss_heruistic: %.8f" % (d_loss, g_loss_heruistic))
+                        # elif config.g_heuristic == 1:
+                        #    print("[Sample] d_loss: %.8f, g_loss_heuristic: %.8f" % (d_loss, g_loss_heuristic))
                         # else:
                         #    print("[Sample] d_loss: %.8f, g_loss_llr: %.8f" % (d_loss, g_loss_llr))
 

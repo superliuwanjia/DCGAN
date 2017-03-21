@@ -122,7 +122,12 @@ def lrelu(x, leak=0.0, name="lrelu"):
     return tf.maximum(x, leak * x)
 
 
-def linear(input_, output_size, scope=None, init_type="xavier", stddev=0.02, bias_start=0.0, with_w=False):
+def lin(x):
+    return x
+
+
+# stddev =0.02 or 1
+def linear(input_, output_size, scope=None, init_type="xavier", stddev=1, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
     print(shape)
     with tf.variable_scope(scope or "Linear"):
