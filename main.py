@@ -9,7 +9,7 @@ import tensorflow as tf
 
 flags = tf.app.flags
 flags.DEFINE_string("activation", "relu", "nonlinearity")
-flags.DEFINE_integer("epoch", 100, "Epoch to train [25]")
+flags.DEFINE_integer("epoch", 100, "Epoch to train [100]")
 flags.DEFINE_float("learning_rate_g", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("learning_rate_d", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
@@ -21,7 +21,7 @@ flags.DEFINE_integer("output_width", 64, "The width of the output images (2nd di
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_integer("z_dim", 100, "Dimension of z. [100]")
 flags.DEFINE_integer("gmm_cluster", None, "number of gmm cluster")
-flags.DEFINE_integer("gmm_dim", 2, "dimention of gmm data")
+flags.DEFINE_integer("gmm_dim", 2, "dimension of gmm data")
 flags.DEFINE_float("gmm_var", 0.02, "variance of generated gmm clusters")
 flags.DEFINE_float("gmm_scale", 2, "scale of generated gmm clusters")
 flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
@@ -34,8 +34,8 @@ flags.DEFINE_string("init_type", "orthogonal", "How to initialize linear layer w
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
-flags.DEFINE_integer("visualize_interval", 5, "True for visualizing, False for nothing [False]")
-flags.DEFINE_integer("g_heruistic", 0, "True for -log(D) g loss ")
+flags.DEFINE_integer("visualize_interval", 5, "save generated samples every [5] batches")
+flags.DEFINE_integer("g_heuristic", 0, "True for -log(D) g loss ")
 flags.DEFINE_integer("g_update", 1, "Two generator update for 1 discriminator update")
 FLAGS = flags.FLAGS
 
