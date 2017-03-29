@@ -361,20 +361,23 @@ def generate_gmm_grid_data(num_data=50000, dim=2, num_cluster=None, scale=2, var
     return np.clip(data, -3 * scale, 3 * scale), clusters, means
 
 
-def generate_gmm_dense_data(num_data=50000, dim=2, num_cluster=None, scale=2, var=0.02):
+def generate_gmm_dense_data(num_data=50000, dim=2, num_cluster=None, means=None, scale=2, var=0.02):
     np.random.seed(0) 
-    if num_cluster == None:
+    if num_cluster == None and means == None:
         num_cluster = np.power(2, dim-1)
+    elif not means == None:
+        num_cluster = len(means)
     #assert num_cluster <= np.power(2, dim-1)
     
     num_clusters =range(num_cluster)
     #random.shuffle(num_clusters)
 
-    means = []
+    if not means:
+        means = []
     
-    for cluster in num_clusters:
-        cluster_mean = np.random.uniform(0, scale, size=(1, dim))        
-        means.append(cluster_mean)
+        for cluster in num_clusters:
+            cluster_mean = np.random.uniform(0, scale, size=(1, dim))        
+            means.append(cluster_mean)
 
 
     means = np.concatenate(means, axis=0)
