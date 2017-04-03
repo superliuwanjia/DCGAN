@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+python ../misc_models_main.py --tag cifar10_sc_1024_01 --dataset cifar10 --model SC --visualization components --num_components 1024 --sparsity 0.1
+python ../misc_models_main.py --tag cifar10_sc_100_01 --dataset cifar10 --model SC --visualization components --num_components 100 --sparsity 0.1
+python ../misc_models_main.py --tag cifar10_sc_1024_1 --dataset cifar10 --model SC --visualization components --num_components 1024 --sparsity 1
+python ../misc_models_main.py --tag cifar10_sc_100_1 --dataset cifar10 --model SC --visualization components --num_components 100 --sparsity 1
+
+python ../misc_models_main.py --tag berkeley_sc_1000_01 --dataset berkeley --model SC --visualization components --num_components 1000 --sparsity 0.1
+python ../misc_models_main.py --tag berkeley_sc_100_01 --dataset berkeley --model SC --visualization components --num_components 100 --sparsity 0.1
+python ../misc_models_main.py --tag berkeley_sc_1000_1 --dataset berkeley --model SC --visualization components --num_components 1000 --sparsity 1
+python ../misc_models_main.py --tag berkeley_sc_100_1 --dataset berkeley --model SC --visualization components --num_components 100 --sparsity 1
+
+
+python ../misc_models_main.py --tag cifar10_ica_1024 --dataset cifar10 --model ICA --visualization components --num_components 1024
+python ../misc_models_main.py --tag cifar10_ica_10 --dataset cifar10 --model ICA --visualization components --num_components 10
+
+python ../misc_models_main.py --tag berkeley_ica_1024 --dataset berkeley --model ICA --visualization components --num_components 1024
+python ../misc_models_main.py --tag berkeley_ica_10 --dataset berkeley --model ICA --visualization components --num_components 10
