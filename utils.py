@@ -4,6 +4,7 @@ from __future__ import print_function
 Some codes from https://github.com/Newmu/dcgan_code
 """
 from __future__ import division
+import os
 import math
 import json
 import random
@@ -21,9 +22,9 @@ import numpy as np
 from time import gmtime, strftime
 import tensorflow as tf
 
-matplotlib.use('Agg')
-ds = tf.contrib.distributions
-slim = tf.contrib.slim
+matplotlib.use('Qt4agg')
+#ds = tf.contrib.distributions
+#slim = tf.contrib.slim
 pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1 / math.sqrt(k_w * k_h * x.get_shape()[-1])
@@ -498,6 +499,55 @@ def sample_mog(batch_size, n_mixture=8, std=0.01, radius=1.0):
     data = ds.Mixture(cat, comps)
     return data.sample_n(batch_size)
 
+def stack_square_matrix(matrices):
+    rows = []
+    side_sqrt = int(np.sqrt(len(matrices)))
+    for i in range(side_sqrt):
+        rows.append(np.hstack(matrices[i*side_sqrt:(i+1)*side_sqrt]))
+    return np.vstack(rows)
+
+def visualize_matrix(path, matrices):
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    square_matrix_ints =[]
+    # each eigen vector in a specific cluster
+    for matrix in matrices:
+        side = int(np.sqrt(np.prod(matrix.shape)))
+        matrix = matrix.reshape([side, side]) 
+        # make plot dynamic range to int8
+        value_range = np.max(matrix) - np.min(matrix)
+        square_matrix_int = ((np.min(matrix) + matrix)
+               *255/value_range).astype('uint8')
+        square_matrix_ints.append(square_matrix_int)
+    img = stack_square_matrix(square_matrix_ints)
+    #img = PIL.Image.fromarray(img)
+    scipy.misc.imsave(os.path.join(path, "matrix.png"), img) 
+
+
+def visualize_cov(path, cov):
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    for i, matrix in enumerate(cov):
+        eigenvalues, eigenvectors = np.linalg.eig(matrix)
+
+        eigen_dict = [ (eigenvalues[i], eigenvectors[:,i]) for i in range(len(eigenvalues))]
+        sorted_eigen_pair = sorted(eigen_dict, cmp=lambda x, y: cmp(y[0], x[0]))
+
+        square_eigen_vector_ints =[]
+        # each eigen vector in a specific cluster
+        for (eigenvalue, eigenvector) in sorted_eigen_pair:
+            side = int(np.sqrt(len(sorted_eigen_pair)))
+            squared_eigen_vector = eigenvector.reshape([side, side])
+            # make plot dynamic range to int8
+            value_range = np.max(eigenvector) - np.min(eigenvector)
+            square_eigen_vector_int = ((np.min(eigenvector) + squared_eigen_vector)
+                   *255/value_range).astype('uint8')
+            square_eigen_vector_ints.append(square_eigen_vector_int)
+        img = stack_square_matrix(square_eigen_vector_ints)
+        #img = PIL.Image.fromarray(img)
+        scipy.misc.imsave(os.path.join(path, "cov_"+str(i)+".png"), img) 
 
 def plot_2d(data, center=None, title=None, color=None, save_path=None, axis=[-2, 2, -2, 2], transform=False):
     """
