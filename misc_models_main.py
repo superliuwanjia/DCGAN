@@ -18,13 +18,15 @@ FLAGS = flags.FLAGS
 def main(_):
     data = os.path.join(FLAGS.data_dir, FLAGS.dataset + ".npz")
     print np.load(data)["X_train"].shape
-    if FLAGS.model == "PCA":
+    if FLAGS.model == "GMM":
         model = misc_models.GMM(num_components=FLAGS.num_components)
+    elif FLAGS.model == "PCA":
+        model = misc_models.PCA(num_components=FLAGS.num_components)
     elif FLAGS.model == "ICA":
         model = misc_models.ICA(num_components=FLAGS.num_components)
     elif FLAGS.model == "SC":
-        model = misc_models.SC(sparsity=FLAGS.sparsity)
-
+        model = misc_models.SC(sparsity=FLAGS.sparsity, num_components=FLAGS.num_components)
+    
     r = model.train(data) 
 
     if FLAGS.visualization == "covariances":

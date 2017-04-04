@@ -1,4 +1,3 @@
-from __future__ import print_function
 
 """
 Some codes from https://github.com/Newmu/dcgan_code
@@ -528,8 +527,9 @@ def visualize_matrix(path, matrices):
 def visualize_cov(path, cov):
     if not os.path.exists(path):
         os.mkdir(path)
-
-    for i, matrix in enumerate(cov):
+    print len(cov)
+    for j, matrix in enumerate(cov):
+        print str(j)
         eigenvalues, eigenvectors = np.linalg.eig(matrix)
 
         eigen_dict = [ (eigenvalues[i], eigenvectors[:,i]) for i in range(len(eigenvalues))]
@@ -547,7 +547,7 @@ def visualize_cov(path, cov):
             square_eigen_vector_ints.append(square_eigen_vector_int)
         img = stack_square_matrix(square_eigen_vector_ints)
         #img = PIL.Image.fromarray(img)
-        scipy.misc.imsave(os.path.join(path, "cov_"+str(i)+".png"), img) 
+        scipy.misc.imsave(os.path.join(path, "cov_"+str(j)+".png"), img) 
 
 def plot_2d(data, center=None, title=None, color=None, save_path=None, axis=[-2, 2, -2, 2], transform=False):
     """
