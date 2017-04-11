@@ -140,6 +140,8 @@ class DCGAN(object):
             plot_2d(data[0:1000, :], save_path=self.flags.sample_dir + "/dataset.png", transform=False,
                     axis=[-2, self.flags.gmm_scale + 2, -2, self.flags.gmm_scale + 2])
 
+        elif self.dataset_name == "celebA":
+            pass
         # Processing any arbitrary input images
         else:
             # The method glob() will return a list of pathnames which mataches the path patterns
@@ -155,13 +157,7 @@ class DCGAN(object):
                 self.data_X = np.array(batch).astype(np.float32)[:, :, :, None]
             else:
                 self.data_X = np.array(batch).astype(np.float32)
-        print "input data shape:"
-        print self.data_X.shape
-        # Intensity normalized training images
-        # TODO: But it is not used at all
-        self.data_X_normalized = self.data_X / np.linalg.norm(
-            self.data_X.reshape([self.data_X.shape[0], np.prod(self.data_X.shape[1:4])]),
-            axis=1).reshape([self.data_X.shape[0], 1, 1, 1])
+        
 
     def build_model(self):
         """
@@ -271,12 +267,6 @@ class DCGAN(object):
         Train DCGAN
         """
 
-        # TODO: Why is laoding mnist data again since it has been done by process_input? Also, 'data' is not used
-        # TODO: It seems that MNIST uses data_X and other dataset uses self.data_X
-        if config.dataset == 'mnist':
-            data_X, data_y = self.load_mnist()
-        else:
-            data = glob(os.path.join("./data", config.dataset, "*.jpg"))
         # np.random.shuffle(data)
 
         # -----------------------------------------------------------------
@@ -354,7 +344,15 @@ class DCGAN(object):
         if config.dataset == 'mnist':
             sample_images = data_X[0:self.sample_size]
             sample_labels = data_y[0:self.sample_size]
-        else:
+        elif config.dataset == 'celebA':
+            data = glob(os.path.join("./data", config.dataset, "*.jpg"))
+            sample_files = data[0:self.sample_size]
+            sample = [get_image(sample_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height, is_grayscale = self.is_grayscale) for sample_file in sample_files]
+            if (self.is_grayscale):
+               sample_images = np.array(sample).astype(np.float32)[:, :, :, None]
+            else:
+               sample_images = np.array(sample).astype(np.float32)
+        else: 
             # sample_files = data[0:self.sample_size]
             # sample = [get_image(sample_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height, is_grayscale = self.is_grayscale) for sample_file in sample_files]
             # if (self.is_grayscale):
@@ -377,20 +375,29 @@ class DCGAN(object):
 
         # for-loop: Each iteration is one epoch
         for epoch in xrange(config.epoch):
-            # if config.dataset == 'mnist':
-            #    batch_idxs = min(len(data_X), config.train_size) // config.batch_size
-            # else:
-            #    data = glob(os.path.join("./data", config.dataset, "*.jpg"))
-            #    batch_idxs = min(len(data_X), config.train_size) // config.batch_size
-
+            if config.dataset == 'mnist':
+               batch_idxs = min(len(data_X), config.train_size) // config.batch_size
+            elif config.dataset == "celebA":
+               data = glob(os.path.join("./data", config.dataset, "*.jpg"))
+               batch_idxs = min(len(data), config.train_size) // config.batch_size
+            else:
             # Calculate the number of batches, where train_size is the maximum tolerable batch number
-            batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
+                batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
 
             # iterate training data from the first batch (batch_images, batch_labels) to the last one
             for idx in xrange(0, batch_idxs):
                 if config.dataset == 'mnist':
                     batch_images = data_X[idx * config.batch_size:(idx + 1) * config.batch_size]
                     batch_labels = data_y[idx * config.batch_size:(idx + 1) * config.batch_size]
+                elif config.dataset == 'celebA':
+                    batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
+                    batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height, is_grayscale = self.is_grayscale) for batch_file in batch_files]
+                    if (self.is_grayscale):
+                        batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
+                    else:
+                        batch_images = np.array(batch).astype(np.float32)
+
+
                 else:
                     # batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
                     # batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_height, is_grayscale = self.is_grayscale) for batch_file in batch_files]
