@@ -155,7 +155,8 @@ class DCGAN(object):
                 self.data_X = np.array(batch).astype(np.float32)[:, :, :, None]
             else:
                 self.data_X = np.array(batch).astype(np.float32)
-
+        print "input data shape:"
+        print self.data_X.shape
         # Intensity normalized training images
         # TODO: But it is not used at all
         self.data_X_normalized = self.data_X / np.linalg.norm(
@@ -224,6 +225,10 @@ class DCGAN(object):
             # TODO: What is sampler used for? attribute and method have the same name
             self.sampler = self.sampler(self.z)
             self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+        
+        print "G shape:",self.G.get_shape().as_list()
+        print "Z shape:",self.z.get_shape().as_list()
+        print "D shape:",self.D_logits_.get_shape().as_list()
 
         # Calcalute the accuracy of discriminator for real and fake image
         self.real_accu = tf_accuracy(self.D, 1, self.batch_size)
@@ -806,9 +811,11 @@ class DCGAN(object):
 
                 # A network architecture "DCGAN" (5layer-CNN with batch normalization)
                 elif self.flags.network == "DCGAN":
+                    print "in dcgan discriminator"
                     # Use leaky relu as a nonlinear activation,
                     # and use batch normalization in each hidden layer
                     # TODO: 'h0_' is not well-defined, h0_ should be a 4D tensor, it is?
+                    h0_ = conv2d(image, self.df_dim, name='d_h0_conv')
                     h0 = lrelu(h0_)
 
                     # The parameter self.df_dim*N indicates the output dimension of conv2d
@@ -822,7 +829,11 @@ class DCGAN(object):
                     h3 = lrelu(self.d_bn3(h3_))
 
                     h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
-
+                    print h0.get_shape().as_list()
+                    print h1.get_shape().as_list()
+                    print h2.get_shape().as_list()
+                    print h3.get_shape().as_list()
+ 
                     # TODO: Why is using h0_ instead of h0?
                     layers = [h0_, h1_, h2_, h3_, h4]
 
@@ -986,15 +997,15 @@ class DCGAN(object):
 
                 # DCGAN use a deconvolutional NN (5layer-DeconvNN with batch normalization)
                 elif self.flags.network == "DCGAN":
+                    print "in dcgan generator"
                     s = self.output_height
-                    s2, s4, s8, s16 = int(s / 2), int(s / 4), int(s / 8), int(s / 16)
+                    s2, s4, s8, s16 = int(math.ceil(s / 2)), int(math.ceil(s / 4)), int(math.ceil(s / 8)), int(math.ceil(s / 16))
 
                     # project `z` and reshape, a linear fully-connected layer
                     self.z_, self.h0_w, self.h0_b = linear(z, self.gf_dim * 8 * s16 * s16, 'g_h0_lin', with_w=True)
 
                     # TODO: We should try to avoid using global variables in functions (e.g. self.h0)
                     self.h0 = tf.reshape(self.z_, [-1, s16, s16, self.gf_dim * 8])
-
                     # Specify relu activation nd batch normalization here
                     h0 = tf.nn.relu(self.g_bn0(self.h0))
 
@@ -1017,6 +1028,11 @@ class DCGAN(object):
                         h3, [self.batch_size, s, s, self.c_dim], name='g_h4', with_w=True
                     )
 
+                    print h0.get_shape().as_list()
+                    print h1.get_shape().as_list()
+                    print h2.get_shape().as_list()
+                    print h3.get_shape().as_list()
+                    print h4.get_shape().as_list()
                     layers = [h0, h1, h2, h3, h4]
 
                     self.g_sums = []
@@ -1124,9 +1140,9 @@ class DCGAN(object):
                     return h2
 
                 elif self.flags.network == "DCGAN":
-
+                    print "in dcgan sampler"
                     s = self.output_height
-                    s2, s4, s8, s16 = int(s / 2), int(s / 4), int(s / 8), int(s / 16)
+                    s2, s4, s8, s16 = int(math.ceil(s / 2)), int(math.ceil(s / 4)), int(math.ceil(s / 8)), int(math.ceil(s / 16))
 
                     # project `z` and reshape
                     h0 = tf.reshape(linear(z, self.gf_dim * 8 * s16 * s16, 'g_h0_lin'),

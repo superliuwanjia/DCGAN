@@ -1,3 +1,0 @@
-rm -r samples
-rm -r logs
-rm -r checkpoint

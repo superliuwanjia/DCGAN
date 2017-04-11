@@ -74,7 +74,7 @@ def conv2d(input_, output_dim,
         w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1], output_dim],
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
         conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding='SAME', name="output")
-        print(conv.name)
+        #print(conv.name)
         biases = tf.get_variable('biases', [output_dim], initializer=tf.constant_initializer(0.0))
         conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
 
@@ -118,7 +118,7 @@ def tf_accuracy(t, val, batch_size):
     return count / batch_size
 
 
-def lrelu(x, leak=0.0, name="lrelu"):
+def lrelu(x, leak=0.2, name="lrelu"):
     return tf.maximum(x, leak * x)
 
 
@@ -129,7 +129,7 @@ def lin(x):
 # stddev =0.02 or 1
 def linear(input_, output_size, scope=None, init_type="xavier", stddev=1, bias_start=0.0, with_w=False):
     shape = input_.get_shape().as_list()
-    print(shape)
+    #print(shape)
     with tf.variable_scope(scope or "Linear"):
         if init_type == "normal":
             matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float32,
