@@ -1,4 +1,4 @@
 #!/bin/bash
 
 # regular DCGAN training on celebA
-python -W ignore main.py --log_dir logs/logs_celebA_KL --sample_dir samples/samples_celebA_KL --checkpoint_dir checkpoint/checkpoint_celebA_KL --dataset celebA --epoch 100 --init_type normal --output_height 108 --output_width 108 --is_train True --is_crop True --visualize_interval 10 --g_update 2 --g_objective KL --network DCGAN --log_likelihood True --batch_size 64 --c_dim 3 --z_dim 100 --optimizer adam --learning_rate_g 0.0002 --learning_rate_d 0.0002 
+python -W ignore main.py --log_dir logs/logs_celebA_KL --sample_dir samples/samples_celebA_KL --checkpoint_dir checkpoint/checkpoint_celebA_KL --dataset celebA --epoch 100 --init_type normal --output_height 108 --output_width 108 --is_train True --is_crop True --visualize_interval 10 --g_update 2 --g_objective KL --network DCGAN --batch_size 64 --c_dim 3 --z_dim 100 --optimizer adam --learning_rate_g 0.0002 --learning_rate_d 0.0002 
