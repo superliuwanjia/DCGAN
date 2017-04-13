@@ -31,12 +31,15 @@ flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image s
 flags.DEFINE_string("log_dir", "logs", "Directory name to save the image samples [samples]")
 flags.DEFINE_string("cluster_est", "gmm", "method to estimate cluster #, gmm or jump")
 flags.DEFINE_string("init_type", "orthogonal", "How to initialize linear layer weights")
+flags.DEFINE_string("g_objective", "KL", "generator objective from f divergence, choose from " + \
+                                         "KL, ReverseKL, JS, Jeffrey, Hellinger, TV, Pearson, " + \
+                                         " alpha, logDtrick")
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_integer("visualize_interval", 5, "save generated samples every [5] batches")
-flags.DEFINE_integer("g_heuristic", 0, "True for -log(D) g loss ")
 flags.DEFINE_integer("g_update", 2, "Two generator update for 1 discriminator update")
+flags.DEFINE_integer("alpha", 0, "alpha in alph divergence")
 FLAGS = flags.FLAGS
 
 def main(_):

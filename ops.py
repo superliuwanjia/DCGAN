@@ -166,3 +166,24 @@ def orthogonal_initializer(scale=1.1):
         return tf.constant(scale * q[:shape[0], :shape[1]], dtype=tf.float32)
 
     return _initializer
+
+
+def f_divergence(t, option="KL", alpha=0):
+    if option == "KL":
+        return t * tf.log(t)
+    elif option == "ReverseKL":
+        return -tf.log(t)
+    elif option == "JS":
+        return t * tf.log(t) - (t + 1) * tf.log((t + 1) / 2)
+    elif option == "Jeffrey":
+        return (t - 1) * tf.log(t)
+    elif option == "Hellinger":
+        return (tf.sqrt(t) - 1) ** 2
+    elif option == "TV":
+        return tf.abs(t - 1) / 2
+    elif option == "Pearson":
+        return (t - 1) ** 2 
+    elif option == "alpha":
+        return 4 / (1 - alpha * alpha) * (1 - tf.pow(t, (1 + alpha) / 2))
+    else:
+        raise Exception("Not implemented divergence option")
